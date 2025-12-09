@@ -54,22 +54,40 @@ class TaskCreateView(generics.CreateAPIView):
 
 class TaskListView(generics.ListAPIView):
     """
-    Get all tasks for the authenticated user
+    Get all tasks for the authenticated user with advanced search & filters
     
     GET /api/tasks/
     
     Query Parameters (optional):
+        - search: Search in title and description
         - priority: Filter by priority (low, medium, high)
         - category: Filter by category
         - completed: Filter by completion status (true/false)
+        - date_from: Filter tasks created after this date (YYYY-MM-DD)
+        - date_to: Filter tasks created before this date (YYYY-MM-DD)
+        - deadline_from: Filter by deadline start date
+        - deadline_to: Filter by deadline end date
+        - overdue: Show only overdue tasks (true/false)
+        - sort: Sort by field (created_at, deadline, priority, title)
+        - order: Sort order (asc/desc)
     """
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = TaskListSerializer
 
     def get_queryset(self):
-        """Return tasks for the authenticated user only"""
+        """Return filtered and sorted tasks for the authenticated user"""
+        from django.db.models import Q
+        from datetime import datetime
+        
         user = self.request.user
         queryset = Task.objects.filter(user=user)
+        
+        # Search by keyword (in title or description)
+        search = self.request.query_params.get('search', None)
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) | Q(description__icontains=search)
+            )
         
         # Filter by priority
         priority = self.request.query_params.get('priority', None)
@@ -86,6 +104,70 @@ class TaskListView(generics.ListAPIView):
         if completed is not None:
             is_completed = completed.lower() in ['true', '1', 'yes']
             queryset = queryset.filter(completed=is_completed)
+        
+        # Filter by creation date range
+        date_from = self.request.query_params.get('date_from', None)
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, '%Y-%m-%d')
+                queryset = queryset.filter(created_at__gte=from_date)
+            except ValueError:
+                pass
+        
+        date_to = self.request.query_params.get('date_to', None)
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, '%Y-%m-%d')
+                queryset = queryset.filter(created_at__lte=to_date)
+            except ValueError:
+                pass
+        
+        # Filter by deadline range
+        deadline_from = self.request.query_params.get('deadline_from', None)
+        if deadline_from:
+            try:
+                from_date = datetime.strptime(deadline_from, '%Y-%m-%d')
+                queryset = queryset.filter(deadline__gte=from_date)
+            except ValueError:
+                pass
+        
+        deadline_to = self.request.query_params.get('deadline_to', None)
+        if deadline_to:
+            try:
+                to_date = datetime.strptime(deadline_to, '%Y-%m-%d')
+                queryset = queryset.filter(deadline__lte=to_date)
+            except ValueError:
+                pass
+        
+        # Filter overdue tasks
+        overdue = self.request.query_params.get('overdue', None)
+        if overdue and overdue.lower() in ['true', '1', 'yes']:
+            from django.utils import timezone
+            queryset = queryset.filter(
+                deadline__lt=timezone.now(),
+                completed=False
+            )
+        
+        # Sorting
+        sort_by = self.request.query_params.get('sort', 'created_at')
+        order = self.request.query_params.get('order', 'desc')
+        
+        # Map sort fields
+        sort_fields = {
+            'created_at': 'created_at',
+            'deadline': 'deadline',
+            'priority': 'priority',
+            'title': 'title',
+            'updated_at': 'updated_at',
+        }
+        
+        sort_field = sort_fields.get(sort_by, 'created_at')
+        
+        # Apply ordering
+        if order.lower() == 'asc':
+            queryset = queryset.order_by(sort_field)
+        else:
+            queryset = queryset.order_by(f'-{sort_field}')
         
         return queryset
 
@@ -196,6 +278,151 @@ class TaskToggleCompleteView(APIView):
         return Response({
             'task': response_serializer.data,
             'message': f'Task marked as {status_text}'
+        }, status=status.HTTP_200_OK)
+
+
+class TaskSearchView(APIView):
+    """
+    Advanced task search with detailed results
+    
+    GET /api/tasks/search/
+    
+    Query Parameters:
+        - q: Search query (searches in title and description)
+        - priority: Filter by priority
+        - category: Filter by category
+        - completed: Filter by completion status
+        - date_from: Created after date
+        - date_to: Created before date
+        - deadline_from: Deadline after date
+        - deadline_to: Deadline before date
+        - overdue: Show only overdue tasks
+        - sort: Sort field
+        - order: Sort order (asc/desc)
+    
+    Returns detailed search results with metadata
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Q
+        from datetime import datetime
+        from django.utils import timezone
+        
+        user = request.user
+        queryset = Task.objects.filter(user=user)
+        
+        # Get all search parameters
+        search_query = request.query_params.get('q', '')
+        priority = request.query_params.get('priority', None)
+        category = request.query_params.get('category', None)
+        completed = request.query_params.get('completed', None)
+        date_from = request.query_params.get('date_from', None)
+        date_to = request.query_params.get('date_to', None)
+        deadline_from = request.query_params.get('deadline_from', None)
+        deadline_to = request.query_params.get('deadline_to', None)
+        overdue = request.query_params.get('overdue', None)
+        sort_by = request.query_params.get('sort', 'created_at')
+        order = request.query_params.get('order', 'desc')
+        
+        # Track applied filters
+        applied_filters = []
+        
+        # Search by keyword
+        if search_query:
+            queryset = queryset.filter(
+                Q(title__icontains=search_query) | 
+                Q(description__icontains=search_query)
+            )
+            applied_filters.append(f"Search: '{search_query}'")
+        
+        # Apply filters
+        if priority:
+            queryset = queryset.filter(priority=priority)
+            applied_filters.append(f"Priority: {priority}")
+        
+        if category:
+            queryset = queryset.filter(category=category)
+            applied_filters.append(f"Category: {category}")
+        
+        if completed is not None:
+            is_completed = completed.lower() in ['true', '1', 'yes']
+            queryset = queryset.filter(completed=is_completed)
+            applied_filters.append(f"Completed: {is_completed}")
+        
+        if date_from:
+            try:
+                from_date = datetime.strptime(date_from, '%Y-%m-%d')
+                queryset = queryset.filter(created_at__gte=from_date)
+                applied_filters.append(f"Created after: {date_from}")
+            except ValueError:
+                pass
+        
+        if date_to:
+            try:
+                to_date = datetime.strptime(date_to, '%Y-%m-%d')
+                queryset = queryset.filter(created_at__lte=to_date)
+                applied_filters.append(f"Created before: {date_to}")
+            except ValueError:
+                pass
+        
+        if deadline_from:
+            try:
+                from_date = datetime.strptime(deadline_from, '%Y-%m-%d')
+                queryset = queryset.filter(deadline__gte=from_date)
+                applied_filters.append(f"Deadline after: {deadline_from}")
+            except ValueError:
+                pass
+        
+        if deadline_to:
+            try:
+                to_date = datetime.strptime(deadline_to, '%Y-%m-%d')
+                queryset = queryset.filter(deadline__lte=to_date)
+                applied_filters.append(f"Deadline before: {deadline_to}")
+            except ValueError:
+                pass
+        
+        if overdue and overdue.lower() in ['true', '1', 'yes']:
+            queryset = queryset.filter(
+                deadline__lt=timezone.now(),
+                completed=False
+            )
+            applied_filters.append("Overdue tasks only")
+        
+        # Sorting
+        sort_fields = {
+            'created_at': 'created_at',
+            'deadline': 'deadline',
+            'priority': 'priority',
+            'title': 'title',
+            'updated_at': 'updated_at',
+        }
+        
+        sort_field = sort_fields.get(sort_by, 'created_at')
+        
+        if order.lower() == 'asc':
+            queryset = queryset.order_by(sort_field)
+            sort_info = f"Sorted by {sort_by} (ascending)"
+        else:
+            queryset = queryset.order_by(f'-{sort_field}')
+            sort_info = f"Sorted by {sort_by} (descending)"
+        
+        # Get results
+        tasks = queryset
+        serializer = TaskListSerializer(tasks, many=True)
+        
+        # Prepare response with metadata
+        return Response({
+            'search_results': {
+                'count': tasks.count(),
+                'tasks': serializer.data,
+            },
+            'search_metadata': {
+                'query': search_query if search_query else 'No search query',
+                'filters_applied': applied_filters if applied_filters else ['No filters'],
+                'sorting': sort_info,
+                'total_results': tasks.count(),
+            }
         }, status=status.HTTP_200_OK)
 
 

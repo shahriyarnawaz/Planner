@@ -12,6 +12,7 @@ from .views import (
     TaskDeleteView,
     TaskToggleCompleteView,
     TaskStatsView,
+    TaskSearchView,
 )
 
 urlpatterns = [
@@ -24,6 +25,9 @@ urlpatterns = [
     
     # Task Actions
     path('<int:pk>/toggle-complete/', TaskToggleCompleteView.as_view(), name='task-toggle-complete'),
+    
+    # Search & Filter
+    path('search/', TaskSearchView.as_view(), name='task-search'),
     
     # Task Statistics
     path('stats/', TaskStatsView.as_view(), name='task-stats'),
