@@ -1,6 +1,6 @@
 """
 Main API URL Router
-Routes to different API modules (authentication, users, admin, etc.)
+Routes to different API modules (authentication, users, admin, tasks, etc.)
 """
 
 from django.urls import path, include
@@ -17,5 +17,9 @@ urlpatterns = [
     # Admin Management Module (Super Admin Only)
     # Handles: create admin, manage roles, user statistics
     path('admin/', include('api.admin_management.urls')),
+    
+    # Tasks Module
+    # Handles: task CRUD operations, task statistics
+    path('tasks/', include('api.tasks.urls')),
 ]
 

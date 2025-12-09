@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import UserProfile
+from .models import UserProfile, Task
 
 
 class UserProfileInline(admin.StackedInline):
@@ -40,3 +40,27 @@ class UserProfileAdmin(admin.ModelAdmin):
     search_fields = ('user__email', 'user__first_name', 'user__last_name')
     readonly_fields = ('created_at', 'updated_at')
     ordering = ('-created_at',)
+
+
+# Register Task model
+@admin.register(Task)
+class TaskAdmin(admin.ModelAdmin):
+    list_display = ('title', 'user', 'priority', 'category', 'completed', 'deadline', 'created_at')
+    list_filter = ('priority', 'category', 'completed', 'created_at')
+    search_fields = ('title', 'description', 'user__email')
+    readonly_fields = ('created_at', 'updated_at', 'is_overdue')
+    ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
+    
+    fieldsets = (
+        ('Basic Information', {
+            'fields': ('user', 'title', 'description')
+        }),
+        ('Task Details', {
+            'fields': ('priority', 'category', 'deadline', 'duration', 'completed')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at', 'is_overdue'),
+            'classes': ('collapse',)
+        }),
+    )
