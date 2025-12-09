@@ -52,6 +52,7 @@ class RegisterView(generics.CreateAPIView):
                 'email': user.email,
                 'first_name': user.first_name,
                 'last_name': user.last_name,
+                'role': user.profile.role if hasattr(user, 'profile') else 'user',
             },
             'message': 'User registered successfully',
             'tokens': {
@@ -99,6 +100,7 @@ class LoginView(APIView):
                         'email': user.email,
                         'first_name': user.first_name,
                         'last_name': user.last_name,
+                        'role': user.profile.role if hasattr(user, 'profile') else 'user',
                     },
                     'message': 'Login successful',
                     'tokens': {

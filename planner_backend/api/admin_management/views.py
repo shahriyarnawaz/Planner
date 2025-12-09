@@ -1,0 +1,134 @@
+"""
+Admin Management Views
+Only Super Admin can access these endpoints
+"""
+
+from rest_framework import status, generics
+from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.contrib.auth.models import User
+
+from api.permissions import IsSuperAdmin
+from .serializers import (
+    CreateUserSerializer,
+    UserWithRoleSerializer,
+)
+
+
+class CreateUserView(generics.CreateAPIView):
+    """
+    Create User accounts
+    
+    POST /api/admin/create-user/
+    
+    Only Super Admin can access
+    Created users always have 'user' role
+    
+    Request Body:
+        - first_name (string, required)
+        - last_name (string, required)
+        - email (string, required)
+        - password (string, required)
+        - confirm_password (string, required)
+    """
+    queryset = User.objects.all()
+    permission_classes = [IsSuperAdmin]
+    serializer_class = CreateUserSerializer
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.save()
+        
+        return Response({
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'role': user.profile.role,
+            },
+            'message': 'User account created successfully'
+        }, status=status.HTTP_201_CREATED)
+
+
+class ListAllUsersView(generics.ListAPIView):
+    """
+    List all users with their roles
+    
+    GET /api/admin/users/
+    
+    Only Super Admin can access
+    """
+    queryset = User.objects.all().order_by('-date_joined')
+    permission_classes = [IsSuperAdmin]
+    serializer_class = UserWithRoleSerializer
+
+
+class DeactivateUserView(APIView):
+    """
+    Deactivate/Activate user account
+    
+    PATCH /api/admin/users/{user_id}/toggle-status/
+    
+    Only Super Admin can deactivate users
+    """
+    permission_classes = [IsSuperAdmin]
+
+    def patch(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({
+                'error': 'User not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Prevent deactivating super admin
+        if user.profile.role == 'super_admin':
+            return Response({
+                'error': 'Cannot deactivate Super Admin'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        # Toggle active status
+        user.is_active = not user.is_active
+        user.save()
+        
+        status_text = 'activated' if user.is_active else 'deactivated'
+        
+        return Response({
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'is_active': user.is_active,
+            },
+            'message': f'User {status_text} successfully'
+        }, status=status.HTTP_200_OK)
+
+
+class GetUserStatsView(APIView):
+    """
+    Get user statistics
+    
+    GET /api/admin/stats/
+    
+    Only Super Admin can access
+    """
+    permission_classes = [IsSuperAdmin]
+
+    def get(self, request):
+        total_users = User.objects.count()
+        super_admins = User.objects.filter(profile__role='super_admin').count()
+        regular_users = User.objects.filter(profile__role='user').count()
+        active_users = User.objects.filter(is_active=True).count()
+        inactive_users = User.objects.filter(is_active=False).count()
+        
+        return Response({
+            'statistics': {
+                'total_users': total_users,
+                'super_admins': super_admins,
+                'regular_users': regular_users,
+                'active_users': active_users,
+                'inactive_users': inactive_users,
+            }
+        }, status=status.HTTP_200_OK)
+

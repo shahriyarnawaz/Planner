@@ -12,10 +12,12 @@ class UserSerializer(serializers.ModelSerializer):
     Serializer for user profile information
     Used for displaying and updating user details
     """
+    role = serializers.CharField(source='profile.role', read_only=True)
+    
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined']
-        read_only_fields = ['id', 'date_joined']
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'date_joined']
+        read_only_fields = ['id', 'role', 'date_joined']
 
 
 class UserListSerializer(serializers.ModelSerializer):
