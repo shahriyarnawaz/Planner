@@ -8,6 +8,7 @@ from rest_framework import status, generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 
 from api.models import Task
 from api.permissions import IsOwnerOrSuperAdmin
@@ -497,5 +498,70 @@ class TaskStatsView(APIView):
                 },
                 'categories': category_counts,
             }
+        }, status=status.HTTP_200_OK)
+
+
+class UpcomingDeadlinesView(APIView):
+    """
+    Get upcoming deadline tasks
+    
+    GET /api/tasks/upcoming-deadlines/
+    
+    Query Parameters (optional):
+        - hours: Show tasks with deadlines within this many hours (default: 24)
+        - limit: Maximum number of tasks to return (default: 10)
+    
+    Returns tasks with deadlines approaching soon
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from datetime import timedelta
+        
+        user = request.user
+        now = timezone.now()
+        
+        # Get hours parameter (default: 24 hours)
+        hours_ahead = int(request.query_params.get('hours', 24))
+        limit = int(request.query_params.get('limit', 10))
+        
+        # Calculate future time
+        future_time = now + timedelta(hours=hours_ahead)
+        
+        # Find upcoming deadline tasks
+        upcoming_tasks = Task.objects.filter(
+            user=user,
+            deadline__gte=now,
+            deadline__lte=future_time,
+            completed=False
+        ).order_by('deadline')[:limit]
+        
+        # Serialize tasks and add time calculations
+        tasks_with_time = []
+        for task in upcoming_tasks:
+            time_until = task.deadline - now
+            hours_until = int(time_until.total_seconds() / 3600)
+            minutes_until = int((time_until.total_seconds() % 3600) / 60)
+            
+            if hours_until > 0:
+                time_str = f"{hours_until} hour(s) and {minutes_until} minute(s)"
+            else:
+                time_str = f"{minutes_until} minute(s)"
+            
+            # Serialize individual task
+            task_serializer = TaskListSerializer(task)
+            task_data = task_serializer.data
+            task_data['time_until_deadline'] = time_str
+            task_data['hours_until'] = hours_until
+            task_data['minutes_until'] = minutes_until
+            tasks_with_time.append(task_data)
+        
+        return Response({
+            'upcoming_deadlines': {
+                'count': upcoming_tasks.count(),
+                'hours_ahead': hours_ahead,
+                'tasks': tasks_with_time,
+            },
+            'message': f'Found {upcoming_tasks.count()} task(s) with deadlines within {hours_ahead} hours'
         }, status=status.HTTP_200_OK)
 

@@ -13,6 +13,7 @@ from .views import (
     TaskToggleCompleteView,
     TaskStatsView,
     TaskSearchView,
+    UpcomingDeadlinesView,
 )
 
 urlpatterns = [
@@ -28,6 +29,9 @@ urlpatterns = [
     
     # Search & Filter
     path('search/', TaskSearchView.as_view(), name='task-search'),
+    
+    # Upcoming Deadlines
+    path('upcoming-deadlines/', UpcomingDeadlinesView.as_view(), name='upcoming-deadlines'),
     
     # Task Statistics
     path('stats/', TaskStatsView.as_view(), name='task-stats'),
