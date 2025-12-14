@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 
 from api.models import Task
 from api.permissions import IsOwnerOrSuperAdmin
+from api.email_notifications import send_task_creation_email, send_task_completion_email
 from .serializers import (
     TaskSerializer,
     TaskCreateSerializer,
@@ -43,12 +44,25 @@ class TaskCreateView(generics.CreateAPIView):
         # Automatically assign the task to the logged-in user
         task = serializer.save(user=request.user)
         
+        # Send email notification
+        print("\n" + "="*60)
+        print("🔄 ATTEMPTING TO SEND TASK CREATION EMAIL...")
+        print("="*60)
+        
+        email_sent = send_task_creation_email(task)
+        
+        if email_sent:
+            print("✅ Email notification sent successfully!")
+        else:
+            print("⚠️ Email notification failed, but task was created successfully.")
+        
         # Return full task data
         response_serializer = TaskSerializer(task)
         
         return Response({
             'task': response_serializer.data,
-            'message': 'Task created successfully'
+            'message': 'Task created successfully',
+            'email_sent': email_sent
         }, status=status.HTTP_201_CREATED)
 
 
@@ -268,8 +282,18 @@ class TaskToggleCompleteView(APIView):
         task = get_object_or_404(Task, pk=pk, user=request.user)
         
         # Toggle completion status
+        was_completed = task.completed
         task.completed = not task.completed
         task.save()
+        
+        # Send completion email if task is now completed and email hasn't been sent
+        email_sent = False
+        if task.completed and not was_completed and not task.completion_email_sent:
+            try:
+                send_task_completion_email(task)
+                email_sent = True
+            except Exception as e:
+                print(f"Failed to send completion email: {e}")
         
         response_serializer = TaskSerializer(task)
         
@@ -277,7 +301,8 @@ class TaskToggleCompleteView(APIView):
         
         return Response({
             'task': response_serializer.data,
-            'message': f'Task marked as {status_text}'
+            'message': f'Task marked as {status_text}',
+            'email_sent': email_sent
         }, status=status.HTTP_200_OK)
 
 

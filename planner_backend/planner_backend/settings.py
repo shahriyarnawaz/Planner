@@ -196,3 +196,19 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+
+# Email Configuration (SMTP)
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # Change to your SMTP server
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'shahriyarnawaz0333@gmail.com'  # Change to your email
+EMAIL_HOST_PASSWORD = 'lzcxfnapghcrasro'  # Use App Password for Gmail
+DEFAULT_FROM_EMAIL = 'Planner App <shahriyarnawaz0333email@gmail.com>'
+
+
+
+
+# For development/testing, use console backend (prints to terminal)
+# Uncomment below to test emails in console
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

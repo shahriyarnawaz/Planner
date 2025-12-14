@@ -77,9 +77,20 @@ class Task(models.Model):
     description = models.TextField(blank=True, null=True)
     priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium')
     category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
+    
+    # Time scheduling
+    task_date = models.DateField(blank=True, null=True, help_text='Date for the task')
+    start_time = models.TimeField(blank=True, null=True, help_text='Task start time')
+    end_time = models.TimeField(blank=True, null=True, help_text='Task end time')
+    
     deadline = models.DateTimeField(blank=True, null=True)
     duration = models.IntegerField(help_text='Duration in minutes', blank=True, null=True)
     completed = models.BooleanField(default=False)
+    
+    # Email tracking
+    creation_email_sent = models.BooleanField(default=False)
+    completion_email_sent = models.BooleanField(default=False)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -99,3 +110,54 @@ class Task(models.Model):
             from django.utils import timezone
             return timezone.now() > self.deadline
         return False
+    
+    @property
+    def calculated_duration(self):
+        """Calculate duration from start and end time"""
+        if self.start_time and self.end_time:
+            from datetime import datetime, timedelta
+            start = datetime.combine(datetime.today(), self.start_time)
+            end = datetime.combine(datetime.today(), self.end_time)
+            
+            if end < start:
+                # Handle overnight tasks
+                end += timedelta(days=1)
+            
+            diff = end - start
+            return int(diff.total_seconds() / 60)  # Return minutes
+        return self.duration
+    
+    def clean(self):
+        """Validate task data"""
+        from django.core.exceptions import ValidationError
+        from datetime import datetime, timedelta
+        
+        # Validate time slot
+        if self.start_time and self.end_time:
+            start = datetime.combine(datetime.today(), self.start_time)
+            end = datetime.combine(datetime.today(), self.end_time)
+            
+            if end < start:
+                end += timedelta(days=1)
+            
+            duration_minutes = int((end - start).total_seconds() / 60)
+            
+            if duration_minutes < 15:
+                raise ValidationError({
+                    'end_time': 'Task duration must be at least 15 minutes'
+                })
+            
+            # Auto-calculate duration
+            self.duration = duration_minutes
+        
+        elif self.start_time or self.end_time:
+            raise ValidationError('Both start_time and end_time must be provided together')
+    
+    def save(self, *args, **kwargs):
+        """Override save to set deadline from slots and run validation"""
+        from datetime import datetime, timezone as dt_timezone
+        # Always set deadline from slots
+        if self.task_date and self.end_time:
+            self.deadline = datetime.combine(self.task_date, self.end_time).replace(tzinfo=dt_timezone.utc)
+        self.clean()
+        super().save(*args, **kwargs)
