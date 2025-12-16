@@ -58,6 +58,7 @@ class Command(BaseCommand):
         self.stdout.write(f"\n📋 Found {total_count} upcoming deadline task(s):\n")
         
         emails_sent = 0
+        emails_skipped = 0
         
         for task in upcoming_tasks:
             time_until = task.deadline - now
@@ -80,10 +81,16 @@ class Command(BaseCommand):
             # Send email reminder if requested
             if send_email:
                 try:
-                    # Check if reminder was already sent (you might want to add a field for this)
-                    send_task_reminder_email(task)
-                    emails_sent += 1
-                    self.stdout.write(self.style.SUCCESS(f"     ✅ Reminder email sent"))
+                    if getattr(task, 'reminder_email_sent', False):
+                        emails_skipped += 1
+                        self.stdout.write(self.style.WARNING("     ⏭️ Reminder already sent"))
+                    else:
+                        sent_at = send_task_reminder_email(task)
+                        if sent_at:
+                            emails_sent += 1
+                            self.stdout.write(self.style.SUCCESS(f"     ✅ Reminder email sent at: {sent_at.strftime('%Y-%m-%d %H:%M:%S %z')}"))
+                        else:
+                            self.stdout.write(self.style.ERROR("     ❌ Reminder email not sent"))
                 except Exception as e:
                     self.stdout.write(self.style.ERROR(f"     ❌ Failed to send email: {e}"))
             
@@ -94,12 +101,9 @@ class Command(BaseCommand):
         self.stdout.write(f"   Total upcoming tasks: {total_count}")
         if send_email:
             self.stdout.write(f"   Emails sent: {emails_sent}")
+            self.stdout.write(f"   Emails skipped: {emails_skipped}")
         self.stdout.write("="*60 + "\n")
-        
-        # Return data for API usage
-        return {
-            'total': total_count,
-            'tasks': upcoming_tasks,
-            'emails_sent': emails_sent if send_email else 0
-        }
+
+        return
+
 

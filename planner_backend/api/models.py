@@ -90,6 +90,8 @@ class Task(models.Model):
     # Email tracking
     creation_email_sent = models.BooleanField(default=False)
     completion_email_sent = models.BooleanField(default=False)
+    reminder_email_sent = models.BooleanField(default=False)
+    reminder_email_sent_at = models.DateTimeField(blank=True, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -131,6 +133,7 @@ class Task(models.Model):
         """Validate task data"""
         from django.core.exceptions import ValidationError
         from datetime import datetime, timedelta
+        from django.utils import timezone
         
         # Validate time slot
         if self.start_time and self.end_time:
@@ -152,12 +155,93 @@ class Task(models.Model):
         
         elif self.start_time or self.end_time:
             raise ValidationError('Both start_time and end_time must be provided together')
+
+        if self.pk is None and not self.completed and self.task_date and self.start_time:
+            now = timezone.now()
+            today = now.date()
+            current_time = now.time()
+            if self.task_date < today:
+                raise ValidationError({'task_date': 'Task date cannot be in the past'})
+            if self.task_date == today and self.start_time <= current_time:
+                raise ValidationError({'start_time': 'Task start time must be in the future'})
     
     def save(self, *args, **kwargs):
         """Override save to set deadline from slots and run validation"""
-        from datetime import datetime, timezone as dt_timezone
+        from datetime import datetime
+        from django.utils import timezone
         # Always set deadline from slots
         if self.task_date and self.end_time:
-            self.deadline = datetime.combine(self.task_date, self.end_time).replace(tzinfo=dt_timezone.utc)
+            naive_deadline = datetime.combine(self.task_date, self.end_time)
+            self.deadline = timezone.make_aware(naive_deadline, timezone.get_current_timezone())
         self.clean()
         super().save(*args, **kwargs)
+
+        if self.completed:
+            TaskReminder.objects.filter(task=self, sent_at__isnull=True).delete()
+            return
+
+        if self.deadline:
+            self.schedule_reminders()
+
+    def schedule_reminders(self, min_gap_minutes=10):
+        from datetime import timedelta
+        from django.utils import timezone
+
+        if not self.task_date or not self.start_time or not self.created_at:
+            return
+
+        now = timezone.now()
+        min_allowed = self.created_at + timedelta(minutes=min_gap_minutes)
+
+        naive_start = timezone.datetime.combine(self.task_date, self.start_time)
+        start_at = timezone.make_aware(naive_start, timezone.get_current_timezone())
+
+        TaskReminder.objects.filter(task=self, sent_at__isnull=True).delete()
+
+        candidates = [
+            (TaskReminder.TYPE_DAY_BEFORE, start_at - timedelta(days=1)),
+            (TaskReminder.TYPE_HOUR_BEFORE, start_at - timedelta(hours=1)),
+            (TaskReminder.TYPE_MINUTES_15, start_at - timedelta(minutes=15)),
+        ]
+
+        reminders_to_create = []
+        for reminder_type, scheduled_for in candidates:
+            if scheduled_for <= now:
+                continue
+            if scheduled_for < min_allowed:
+                continue
+            reminders_to_create.append(TaskReminder(task=self, reminder_type=reminder_type, scheduled_for=scheduled_for))
+
+        if reminders_to_create:
+            TaskReminder.objects.bulk_create(reminders_to_create)
+
+
+class TaskReminder(models.Model):
+    TYPE_DAY_BEFORE = 'day_before'
+    TYPE_HOUR_BEFORE = 'hour_before'
+    TYPE_MINUTES_15 = 'minutes_15'
+
+    TYPE_CHOICES = [
+        (TYPE_DAY_BEFORE, '1 day before'),
+        (TYPE_HOUR_BEFORE, '1 hour before'),
+        (TYPE_MINUTES_15, '15 minutes before'),
+    ]
+
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='reminders')
+    reminder_type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    scheduled_for = models.DateTimeField()
+    sent_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'task_reminders'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['task', 'reminder_type'],
+                condition=models.Q(sent_at__isnull=True),
+                name='uniq_unsent_task_reminder_type',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.task_id} - {self.reminder_type} - {self.scheduled_for}"

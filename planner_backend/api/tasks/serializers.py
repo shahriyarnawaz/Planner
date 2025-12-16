@@ -55,6 +55,10 @@ class TaskCreateSerializer(serializers.ModelSerializer):
     """
     Serializer for creating tasks with compulsory slots and auto deadline
     """
+
+    start_time = serializers.TimeField(input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
+    end_time = serializers.TimeField(input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
+
     class Meta:
         model = Task
         fields = [
@@ -69,7 +73,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
         ]
     
     def validate(self, attrs):
-        from datetime import datetime, timezone as dt_timezone
+        from datetime import datetime
         # Require all slots
         task_date = attrs.get('task_date')
         start_time = attrs.get('start_time')
@@ -89,8 +93,6 @@ class TaskCreateSerializer(serializers.ModelSerializer):
                 'slot': 'Task duration must be at least 15 minutes.'
             })
         attrs['duration'] = minutes
-        # Set deadline (always as UTC)
-        attrs['deadline'] = datetime.combine(task_date, end_time).replace(tzinfo=dt_timezone.utc)
         return attrs
 
 
@@ -98,6 +100,10 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
     """
     Serializer for updating tasks - all fields are optional, but all slots must be present to update slot.
     """
+
+    start_time = serializers.TimeField(required=False, input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
+    end_time = serializers.TimeField(required=False, input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
+
     class Meta:
         model = Task
         fields = [
@@ -112,7 +118,7 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
             'completed',
         ]
     def validate(self, attrs):
-        from datetime import datetime, timezone as dt_timezone
+        from datetime import datetime
         # Only require slots if changing any slot
         slot_changes = any(k in attrs for k in ['task_date','start_time','end_time'])
         if slot_changes:
@@ -133,7 +139,6 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
                     'slot': 'Task duration must be at least 15 minutes.'
                 })
             attrs['duration'] = minutes
-            attrs['deadline'] = datetime.combine(task_date, end_time).replace(tzinfo=dt_timezone.utc)
         return attrs
 
 

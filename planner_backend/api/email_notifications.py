@@ -272,7 +272,7 @@ def send_task_completion_email(task):
         return False
 
 
-def send_task_reminder_email(task):
+def send_task_reminder_email(task, reminder_type=None, scheduled_for=None):
     """
     Send reminder email for upcoming deadline task
     """
@@ -281,7 +281,16 @@ def send_task_reminder_email(task):
     # Calculate time until deadline
     from django.utils import timezone
     now = timezone.now()
-    time_until = task.deadline - now
+    local_now = timezone.localtime(now)
+    local_deadline = timezone.localtime(task.deadline) if task.deadline else None
+    local_start = None
+    if task.task_date and task.start_time:
+        naive_start = timezone.datetime.combine(task.task_date, task.start_time)
+        start_at = timezone.make_aware(naive_start, timezone.get_current_timezone())
+        local_start = timezone.localtime(start_at)
+        time_until = start_at - now
+    else:
+        time_until = task.deadline - now
     
     hours_until = int(time_until.total_seconds() / 3600)
     minutes_until = int((time_until.total_seconds() % 3600) / 60)
@@ -291,7 +300,15 @@ def send_task_reminder_email(task):
     else:
         time_str = f"{minutes_until} minute(s)"
     
-    subject = f'⏰ Reminder: {task.title} - Deadline Approaching!'
+    reminder_label = "Reminder"
+    if reminder_type == 'day_before':
+        reminder_label = '1 Day Reminder'
+    elif reminder_type == 'hour_before':
+        reminder_label = '1 Hour Reminder'
+    elif reminder_type == 'minutes_15':
+        reminder_label = '15 Minute Reminder'
+
+    subject = f'{reminder_label}: {task.title} - Starting Soon'
     
     # HTML email body
     time_slot_info = ""
@@ -307,7 +324,7 @@ def send_task_reminder_email(task):
     <html>
     <body style="font-family: Arial, sans-serif; padding: 20px;">
         <div style="max-width: 600px; margin: 0 auto; background: #f9f9f9; padding: 20px; border-radius: 10px;">
-            <h2 style="color: #2196F3;">⏰ Task Deadline Reminder</h2>
+            <h2 style="color: #2196F3;">Task Reminder</h2>
             
             <div style="background: white; padding: 20px; border-radius: 5px; margin: 20px 0;">
                 <h3 style="color: #333; margin-top: 0;">{task.title}</h3>
@@ -316,14 +333,14 @@ def send_task_reminder_email(task):
                 
                 <div style="padding: 15px; background: #e3f2fd; border-left: 4px solid #2196F3; margin: 15px 0;">
                     <p style="margin: 0; font-size: 16px; font-weight: bold;">
-                        ⏰ Deadline in: {time_str}
+                        Starts in: {time_str}
                     </p>
                 </div>
                 
                 <table style="width: 100%; margin: 15px 0;">
                     <tr>
-                        <td style="padding: 8px; background: #f5f5f5;"><strong>Deadline:</strong></td>
-                        <td style="padding: 8px;">{task.deadline.strftime("%B %d, %Y at %I:%M %p")}</td>
+                        <td style="padding: 8px; background: #f5f5f5;"><strong>Starts At:</strong></td>
+                        <td style="padding: 8px;">{local_start.strftime("%B %d, %Y at %I:%M %p") if local_start else 'N/A'}</td>
                     </tr>
                     <tr>
                         <td style="padding: 8px; background: #f5f5f5;"><strong>Priority:</strong></td>
@@ -338,11 +355,11 @@ def send_task_reminder_email(task):
             </div>
             
             <p style="color: #666; font-size: 14px;">
-                Don't forget to complete this task before the deadline! 📅
+                Don't forget to start this task on time.
             </p>
             
             <p style="color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px;">
-                This is an automated reminder from Planner App. Stay on track! 💪
+                This is an automated reminder from Planner App.
             </p>
         </div>
     </body>
@@ -351,14 +368,19 @@ def send_task_reminder_email(task):
     
     try:
         print("\n" + "="*60)
-        print("📧 SENDING TASK REMINDER EMAIL")
+        print("SENDING TASK REMINDER EMAIL")
         print("="*60)
         print(f"To: {user.email}")
         print(f"Subject: {subject}")
         print(f"Task: {task.title}")
-        print(f"Deadline: {task.deadline.strftime('%Y-%m-%d %H:%M:%S')}")
+        if scheduled_for is not None:
+            print(f"Scheduled for: {timezone.localtime(scheduled_for).strftime('%Y-%m-%d %I:%M %p')}")
+        if local_start is not None:
+            print(f"Starts At: {local_start.strftime('%Y-%m-%d %I:%M %p')}")
+        elif local_deadline is not None:
+            print(f"Deadline: {local_deadline.strftime('%Y-%m-%d %I:%M %p')}")
         print(f"Time until: {time_str}")
-        print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Time: {local_now.strftime('%Y-%m-%d %I:%M %p')}")
         print("-"*60)
         
         email = EmailMessage(
@@ -369,19 +391,24 @@ def send_task_reminder_email(task):
         )
         email.content_subtype = "html"
         email.send()
+
+        if reminder_type is None:
+            task.reminder_email_sent = True
+            task.reminder_email_sent_at = now
+            task.save(update_fields=['reminder_email_sent', 'reminder_email_sent_at'])
         
-        print("✅ REMINDER EMAIL SENT SUCCESSFULLY!")
-        print(f"✅ Email sent to: {user.email}")
-        print(f"✅ Task ID: {task.id}")
+        print("REMINDER EMAIL SENT SUCCESSFULLY")
+        print(f"Email sent to: {user.email}")
+        print(f"Task ID: {task.id}")
         print("="*60 + "\n")
-        
-        return True
+
+        return now
     except Exception as e:
         print("\n" + "="*60)
-        print("❌ REMINDER EMAIL SENDING FAILED")
+        print("REMINDER EMAIL SENDING FAILED")
         print("="*60)
         print(f"To: {user.email}")
         print(f"Error: {str(e)}")
         print(f"Task ID: {task.id}")
         print("="*60 + "\n")
-        return False
+        return None
