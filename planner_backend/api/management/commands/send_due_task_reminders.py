@@ -22,17 +22,28 @@ class Command(BaseCommand):
             default=5,
             help='Send reminders scheduled within the last N minutes as well (default: 5)',
         )
+        parser.add_argument(
+            '--dry-run',
+            action='store_true',
+            help='Do not send emails; only print which reminders would be sent',
+        )
 
     def handle(self, *args, **options):
         window_minutes = options['window_minutes']
+        dry_run = options['dry_run']
         now = timezone.now()
         window_start = now - timedelta(minutes=window_minutes)
+
+        local_now = timezone.localtime(now)
+        local_window_start = timezone.localtime(window_start)
 
         self.stdout.write("\n" + "=" * 60)
         self.stdout.write(self.style.SUCCESS("SENDING DUE TASK REMINDERS"))
         self.stdout.write("=" * 60)
-        self.stdout.write(f"Current time: {now.strftime('%Y-%m-%d %H:%M:%S %z')}")
-        self.stdout.write(f"Window: {window_start.strftime('%Y-%m-%d %H:%M:%S %z')} to {now.strftime('%Y-%m-%d %H:%M:%S %z')}")
+        self.stdout.write(f"Current time (local): {local_now.strftime('%Y-%m-%d %I:%M %p')}")
+        self.stdout.write(f"Window (local): {local_window_start.strftime('%Y-%m-%d %I:%M %p')} to {local_now.strftime('%Y-%m-%d %I:%M %p')}")
+        if dry_run:
+            self.stdout.write(self.style.WARNING("DRY RUN: emails will NOT be sent"))
         self.stdout.write("-" * 60)
 
         due_reminders = (
@@ -63,22 +74,26 @@ class Command(BaseCommand):
             self.stdout.write(f"  Task: {task.title}")
             self.stdout.write(f"     User: {task.user.email}")
             self.stdout.write(f"     Reminder type: {reminder.reminder_type}")
-            self.stdout.write(f"     Scheduled for: {reminder.scheduled_for.strftime('%Y-%m-%d %H:%M:%S %z')}")
+            self.stdout.write(f"     Scheduled for (local): {timezone.localtime(reminder.scheduled_for).strftime('%Y-%m-%d %I:%M %p')}")
 
             try:
-                sent_at = send_task_reminder_email(
-                    task,
-                    reminder_type=reminder.reminder_type,
-                    scheduled_for=reminder.scheduled_for,
-                )
-                if sent_at:
-                    reminder.sent_at = sent_at
-                    reminder.save(update_fields=['sent_at'])
+                if dry_run:
                     sent += 1
-                    self.stdout.write(self.style.SUCCESS(f"     Sent at: {sent_at.strftime('%Y-%m-%d %H:%M:%S %z')}"))
+                    self.stdout.write(self.style.SUCCESS("     Would send (dry-run)"))
                 else:
-                    failed += 1
-                    self.stdout.write(self.style.ERROR("     Not sent"))
+                    sent_at = send_task_reminder_email(
+                        task,
+                        reminder_type=reminder.reminder_type,
+                        scheduled_for=reminder.scheduled_for,
+                    )
+                    if sent_at:
+                        reminder.sent_at = sent_at
+                        reminder.save(update_fields=['sent_at'])
+                        sent += 1
+                        self.stdout.write(self.style.SUCCESS(f"     Sent at (local): {timezone.localtime(sent_at).strftime('%Y-%m-%d %I:%M %p')}"))
+                    else:
+                        failed += 1
+                        self.stdout.write(self.style.ERROR("     Not sent"))
             except Exception as e:
                 failed += 1
                 self.stdout.write(self.style.ERROR(f"     Failed: {e}"))
