@@ -12,6 +12,9 @@ from .views import (
     TaskDeleteView,
     TaskToggleCompleteView,
     TaskStatsView,
+    TimeSpentByCategoryView,
+    CompletionRateView,
+    WeeklyTrendsView,
     TaskSearchView,
     UpcomingDeadlinesView,
     UpcomingTasksView,
@@ -39,5 +42,10 @@ urlpatterns = [
     
     # Task Statistics
     path('stats/', TaskStatsView.as_view(), name='task-stats'),
+
+    # Productivity Insights
+    path('insights/time-spent-per-category/', TimeSpentByCategoryView.as_view(), name='time-spent-per-category'),
+    path('insights/completion-rate/', CompletionRateView.as_view(), name='completion-rate'),
+    path('insights/weekly-trends/', WeeklyTrendsView.as_view(), name='weekly-trends'),
 ]
 

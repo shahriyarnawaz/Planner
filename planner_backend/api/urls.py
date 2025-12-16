@@ -5,6 +5,8 @@ Routes to different API modules (authentication, users, admin, tasks, ml, etc.)
 
 from django.urls import path, include
 
+from api.tasks.views import WeeklyTrendsView
+
 urlpatterns = [
     # Authentication Module
     # Handles: register, login, logout, token refresh, password management
@@ -21,6 +23,9 @@ urlpatterns = [
     # Tasks Module
     # Handles: task CRUD operations, task statistics
     path('tasks/', include('api.tasks.urls')),
+
+    # Analytics Module
+    path('analytics/weekly-trends', WeeklyTrendsView.as_view(), name='analytics-weekly-trends'),
     
     # ML Module (Smart Features)
     # Handles: recurring tasks, time predictions, task ordering, insights

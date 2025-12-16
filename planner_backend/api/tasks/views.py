@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.db.models import Sum, Count, Case, When, IntegerField
 
 from api.models import Task
 from api.permissions import IsOwnerOrSuperAdmin
@@ -533,6 +534,279 @@ class TaskStatsView(APIView):
                 'categories': category_counts,
             }
         }, status=status.HTTP_200_OK)
+
+
+class TimeSpentByCategoryView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from datetime import timedelta
+        from datetime import date as date_type
+        from django.utils.dateparse import parse_date
+
+        def format_minutes(total_minutes: int) -> str:
+            hours = total_minutes // 60
+            minutes = total_minutes % 60
+            if hours <= 0:
+                return f"{minutes}m"
+            if minutes <= 0:
+                return f"{hours}h"
+            return f"{hours}h {minutes}m"
+
+        user = request.user
+
+        now_local = timezone.localtime(timezone.now())
+        today = now_local.date()
+
+        range_param = (request.query_params.get('range') or 'daily').lower()
+        from_param = request.query_params.get('from')
+        to_param = request.query_params.get('to')
+
+        if range_param in ['day', 'daily']:
+            range_param = 'daily'
+        elif range_param in ['week', 'weekly']:
+            range_param = 'weekly'
+
+        start_date: date_type
+        end_date: date_type
+
+        if from_param or to_param:
+            parsed_from = parse_date(from_param) if from_param else None
+            parsed_to = parse_date(to_param) if to_param else None
+            if from_param and not parsed_from:
+                return Response({'detail': 'Invalid from date. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+            if to_param and not parsed_to:
+                return Response({'detail': 'Invalid to date. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            start_date = parsed_from or today
+            end_date = parsed_to or today
+        else:
+            if range_param == 'weekly':
+                start_date = today - timedelta(days=6)
+                end_date = today
+            else:
+                start_date = today
+                end_date = today
+
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+        base_qs = Task.objects.filter(
+            user=user,
+            task_date__gte=start_date,
+            task_date__lte=end_date,
+            start_time__isnull=False,
+            end_time__isnull=False,
+        )
+
+        aggregates = (
+            base_qs.values('category')
+            .annotate(tasks=Count('id'), total_minutes=Sum('duration'))
+            .order_by('-total_minutes')
+        )
+
+        label_map = dict(Task.CATEGORY_CHOICES)
+
+        category_id_map = {key: idx for idx, (key, _) in enumerate(Task.CATEGORY_CHOICES, start=1)}
+
+        categories = []
+        grand_total = 0
+        total_tasks = 0
+        for row in aggregates:
+            total_minutes = int(row['total_minutes'] or 0)
+            task_count = int(row['tasks'] or 0)
+            grand_total += total_minutes
+            total_tasks += task_count
+            category_key = row['category']
+            categories.append({
+                'category_id': category_id_map.get(category_key),
+                'category_key': category_key,
+                'label': label_map.get(category_key, category_key),
+                'tasks': task_count,
+                'total_minutes': total_minutes,
+                'total_time': format_minutes(total_minutes),
+            })
+
+        for item in categories:
+            if grand_total > 0:
+                item['percentage'] = int(round((item['total_minutes'] / grand_total) * 100))
+            else:
+                item['percentage'] = 0
+
+        return Response({
+            'range': range_param,
+            'from': start_date,
+            'to': end_date,
+            'total_tasks': total_tasks,
+            'total_minutes': grand_total,
+            'total_time': format_minutes(grand_total),
+            'categories': categories,
+        }, status=status.HTTP_200_OK)
+
+
+class CompletionRateView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from datetime import timedelta
+        from django.utils.dateparse import parse_date
+
+        user = request.user
+
+        now_local = timezone.localtime(timezone.now())
+        today = now_local.date()
+
+        range_param = (request.query_params.get('range') or 'daily').lower()
+        from_param = request.query_params.get('from')
+        to_param = request.query_params.get('to')
+
+        if range_param in ['day', 'daily']:
+            range_param = 'daily'
+        elif range_param in ['week', 'weekly']:
+            range_param = 'weekly'
+
+        if from_param or to_param:
+            parsed_from = parse_date(from_param) if from_param else None
+            parsed_to = parse_date(to_param) if to_param else None
+            if from_param and not parsed_from:
+                return Response({'detail': 'Invalid from date. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+            if to_param and not parsed_to:
+                return Response({'detail': 'Invalid to date. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+            start_date = parsed_from or today
+            end_date = parsed_to or today
+        else:
+            if range_param == 'weekly':
+                start_date = today - timedelta(days=6)
+                end_date = today
+            else:
+                start_date = today
+                end_date = today
+
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+        tasks = Task.objects.filter(
+            user=user,
+            task_date__gte=start_date,
+            task_date__lte=end_date,
+        )
+
+        total_tasks = tasks.count()
+        completed_tasks = tasks.filter(completed=True).count()
+
+        overdue_tasks = tasks.filter(
+            completed=False,
+            deadline__isnull=False,
+            deadline__lt=timezone.now(),
+        ).count()
+
+        pending_tasks = tasks.filter(completed=False).count()
+
+        # "skipped" is not yet represented in the DB schema; returning 0 for now.
+        skipped_tasks = 0
+
+        completion_rate = (completed_tasks / total_tasks) if total_tasks > 0 else 0
+
+        return Response({
+            'range': range_param,
+            'from': start_date,
+            'to': end_date,
+            'total_tasks': total_tasks,
+            'status_counts': {
+                'completed': completed_tasks,
+                'pending': pending_tasks,
+                'skipped': skipped_tasks,
+                'overdue': overdue_tasks,
+            },
+            'completion_rate': round(completion_rate * 100, 2),
+        }, status=status.HTTP_200_OK)
+
+
+class WeeklyTrendsView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from datetime import timedelta
+        from django.utils.dateparse import parse_date
+        from django.db.models.functions import ExtractIsoWeek, ExtractIsoYear
+
+        user = request.user
+        now_local = timezone.localtime(timezone.now())
+        today = now_local.date()
+
+        weeks_param = request.query_params.get('weeks')
+        from_param = request.query_params.get('from')
+        to_param = request.query_params.get('to')
+
+        if from_param or to_param:
+            parsed_from = parse_date(from_param) if from_param else None
+            parsed_to = parse_date(to_param) if to_param else None
+            if from_param and not parsed_from:
+                return Response({'detail': 'Invalid from date. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+            if to_param and not parsed_to:
+                return Response({'detail': 'Invalid to date. Use YYYY-MM-DD.'}, status=status.HTTP_400_BAD_REQUEST)
+            start_date = parsed_from or today
+            end_date = parsed_to or today
+        else:
+            try:
+                weeks_back = int(weeks_param) if weeks_param else 4
+            except ValueError:
+                return Response({'detail': 'Invalid weeks. Must be an integer.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if weeks_back < 1:
+                weeks_back = 1
+
+            start_date = today - timedelta(days=(weeks_back * 7) - 1)
+            end_date = today
+
+        if start_date > end_date:
+            start_date, end_date = end_date, start_date
+
+        qs = Task.objects.filter(
+            user=user,
+            task_date__gte=start_date,
+            task_date__lte=end_date,
+            start_time__isnull=False,
+            end_time__isnull=False,
+        )
+
+        aggregates = (
+            qs.annotate(
+                iso_year=ExtractIsoYear('task_date'),
+                iso_week=ExtractIsoWeek('task_date'),
+            )
+            .values('iso_year', 'iso_week')
+            .annotate(
+                planned_minutes=Sum('duration'),
+                completed_minutes=Sum(
+                    Case(
+                        When(completed=True, then='duration'),
+                        default=0,
+                        output_field=IntegerField(),
+                    )
+                ),
+            )
+            .order_by('iso_year', 'iso_week')
+        )
+
+        weeks = []
+        for row in aggregates:
+            planned_minutes = int(row['planned_minutes'] or 0)
+            completed_minutes = int(row['completed_minutes'] or 0)
+            completion_rate = (completed_minutes / planned_minutes * 100) if planned_minutes > 0 else 0
+
+            iso_year = int(row['iso_year'])
+            iso_week = int(row['iso_week'])
+            week_label = f"{iso_year}-W{iso_week:02d}"
+
+            weeks.append({
+                'week_label': week_label,
+                'planned_minutes': planned_minutes,
+                'completed_minutes': completed_minutes,
+                'completion_rate': round(completion_rate, 1),
+            })
+
+        return Response({'weeks': weeks}, status=status.HTTP_200_OK)
 
 
 class UpcomingDeadlinesView(APIView):
