@@ -21,6 +21,40 @@ from .serializers import (
 )
 
 
+class UpcomingTasksView(APIView):
+    """Return all upcoming (future) tasks for the authenticated user."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Q
+
+        user = request.user
+        now_local = timezone.localtime(timezone.now())
+        today = now_local.date()
+        current_time = now_local.time()
+
+        queryset = Task.objects.filter(
+            user=user,
+            completed=False,
+            task_date__isnull=False,
+            start_time__isnull=False,
+        ).filter(
+            Q(task_date__gt=today) |
+            (Q(task_date=today) & Q(start_time__gt=current_time))
+        ).order_by('task_date', 'start_time')
+
+        serializer = TaskSerializer(queryset, many=True)
+
+        return Response({
+            'upcoming_tasks': {
+                'count': queryset.count(),
+                'tasks': serializer.data,
+            },
+            'message': f'Found {queryset.count()} upcoming task(s)'
+        }, status=status.HTTP_200_OK)
+
+
 class TaskCreateView(generics.CreateAPIView):
     """
     Create a new task

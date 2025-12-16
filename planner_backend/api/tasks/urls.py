@@ -14,6 +14,7 @@ from .views import (
     TaskStatsView,
     TaskSearchView,
     UpcomingDeadlinesView,
+    UpcomingTasksView,
 )
 
 urlpatterns = [
@@ -32,6 +33,9 @@ urlpatterns = [
     
     # Upcoming Deadlines
     path('upcoming-deadlines/', UpcomingDeadlinesView.as_view(), name='upcoming-deadlines'),
+
+    # Upcoming Tasks (by start time)
+    path('upcoming/', UpcomingTasksView.as_view(), name='upcoming-tasks'),
     
     # Task Statistics
     path('stats/', TaskStatsView.as_view(), name='task-stats'),
