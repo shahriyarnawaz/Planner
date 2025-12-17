@@ -24,6 +24,9 @@ urlpatterns = [
     # Handles: task CRUD operations, task statistics
     path('tasks/', include('api.tasks.urls')),
 
+    # Templates Module
+    path('', include('api.templates.urls')),
+
     # Analytics Module
     path('analytics/weekly-trends', WeeklyTrendsView.as_view(), name='analytics-weekly-trends'),
     

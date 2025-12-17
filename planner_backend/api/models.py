@@ -245,3 +245,41 @@ class TaskReminder(models.Model):
 
     def __str__(self):
         return f"{self.task_id} - {self.reminder_type} - {self.scheduled_for}"
+
+
+class TaskTemplate(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='task_templates')
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'task_templates'
+        ordering = ['-created_at']
+        verbose_name = 'Task Template'
+        verbose_name_plural = 'Task Templates'
+
+    def __str__(self):
+        return f"{self.name} - {self.user.email}"
+
+
+class TaskTemplateItem(models.Model):
+    template = models.ForeignKey(TaskTemplate, on_delete=models.CASCADE, related_name='items')
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    priority = models.CharField(max_length=10, choices=Task.PRIORITY_CHOICES, default='medium')
+    category = models.CharField(max_length=20, choices=Task.CATEGORY_CHOICES, default='other')
+    start_time = models.TimeField(blank=True, null=True)
+    end_time = models.TimeField(blank=True, null=True)
+    duration = models.IntegerField(blank=True, null=True)
+    order = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'task_template_items'
+        ordering = ['order', 'id']
+
+    def __str__(self):
+        return f"{self.template_id} - {self.title}"
