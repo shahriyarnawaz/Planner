@@ -15,8 +15,38 @@ function App() {
         onLogoClick={() => setCurrentPage('home')}
       />
       {currentPage === 'home' && <Home />}
-      {currentPage === 'signup' && <Signup />}
-      {currentPage === 'login' && <Login />}
+
+      {currentPage === 'signup' && (
+        <>
+          <div className="max-w-7xl mx-auto px-4 pt-6">
+            <button
+              type="button"
+              onClick={() => setCurrentPage('home')}
+              className="inline-flex items-center text-sm text-body hover:text-primary transition-colors"
+            >
+              <span className="mr-1">←</span>
+              Back
+            </button>
+          </div>
+          <Signup />
+        </>
+      )}
+
+      {currentPage === 'login' && (
+        <>
+          <div className="max-w-7xl mx-auto px-4 pt-6">
+            <button
+              type="button"
+              onClick={() => setCurrentPage('home')}
+              className="inline-flex items-center text-sm text-body hover:text-primary transition-colors"
+            >
+              <span className="mr-1">←</span>
+              Back
+            </button>
+          </div>
+          <Login />
+        </>
+      )}
     </div>
   );
 }
