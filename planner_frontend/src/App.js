@@ -3,17 +3,22 @@ import Header from './components/Header';
 import Home from './pages/Home';
 import Signup from './components/Auth/signup';
 import Login from './components/Auth/login';
+import AdminUserDashboardPage from './pages/Admin-User/Dashboard';
+import AdminUserTasksPage from './pages/Admin-User/Tasks';
 
 function App() {
   const [currentPage, setCurrentPage] = React.useState('home');
 
   return (
     <div className="min-h-screen bg-background">
-      <Header
-        onSignupClick={() => setCurrentPage('signup')}
-        onLoginClick={() => setCurrentPage('login')}
-        onLogoClick={() => setCurrentPage('home')}
-      />
+      {currentPage !== 'dashboard' && currentPage !== 'tasks' && (
+        <Header
+          onSignupClick={() => setCurrentPage('signup')}
+          onLoginClick={() => setCurrentPage('login')}
+          onLogoClick={() => setCurrentPage('home')}
+        />
+      )}
+
       {currentPage === 'home' && <Home />}
 
       {currentPage === 'signup' && (
@@ -44,8 +49,28 @@ function App() {
               Back
             </button>
           </div>
-          <Login />
+          <Login onLoginSuccess={() => setCurrentPage('dashboard')} />
         </>
+      )}
+
+      {currentPage === 'dashboard' && (
+        <AdminUserDashboardPage
+          onNavigate={(section) => {
+            if (section === 'dashboard' || section === 'tasks') {
+              setCurrentPage(section);
+            }
+          }}
+        />
+      )}
+
+      {currentPage === 'tasks' && (
+        <AdminUserTasksPage
+          onNavigate={(section) => {
+            if (section === 'dashboard' || section === 'tasks') {
+              setCurrentPage(section);
+            }
+          }}
+        />
       )}
     </div>
   );

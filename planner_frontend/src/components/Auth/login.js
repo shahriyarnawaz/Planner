@@ -1,8 +1,12 @@
 import React from 'react';
 
-const Login = () => {
+const Login = ({ onLoginSuccess }) => {
   const handleSubmit = (event) => {
     event.preventDefault();
+
+    if (onLoginSuccess) {
+      onLoginSuccess();
+    }
   };
 
   return (
