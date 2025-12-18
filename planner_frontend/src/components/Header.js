@@ -1,16 +1,20 @@
 import React from 'react';
 
-const Header = () => {
+const Header = ({ onSignupClick, onLoginClick, onLogoClick }) => {
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
-          <div className="flex-shrink-0">
+          <button
+            type="button"
+            onClick={onLogoClick}
+            className="flex-shrink-0 focus:outline-none"
+          >
             <h1 className="text-2xl font-bold text-primary">
               PlannerLogo
             </h1>
-          </div>
+          </button>
 
           {/* Navigation Links */}
           <nav className="hidden md:flex space-x-8">
@@ -42,10 +46,18 @@ const Header = () => {
 
           {/* Auth Buttons */}
           <div className="flex items-center space-x-4">
-            <button className="text-body hover:text-primary transition-colors duration-200 font-medium">
+            <button
+              type="button"
+              onClick={onLoginClick}
+              className="text-body hover:text-primary transition-colors duration-200 font-medium"
+            >
               Login
             </button>
-            <button className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg font-medium transition-colors duration-200">
+            <button
+              type="button"
+              onClick={onSignupClick}
+              className="bg-primary hover:bg-primary-dark text-white px-6 py-2 rounded-lg font-medium transition-colors duration-200"
+            >
               Signup
             </button>
           </div>
