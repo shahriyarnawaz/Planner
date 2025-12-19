@@ -13,7 +13,8 @@ from django.contrib.auth.models import User
 from .serializers import (
     RegisterSerializer,
     LoginSerializer,
-    ChangePasswordSerializer
+    ChangePasswordSerializer,
+    ForgotPasswordSerializer,
 )
 
 
@@ -191,4 +192,33 @@ class ChangePasswordView(APIView):
         return Response({
             'message': 'Password changed successfully'
         }, status=status.HTTP_200_OK)
+
+
+class ForgotPasswordView(APIView):
+    """API endpoint to reset password using email (forgot password)."""
+
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = ForgotPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        email = serializer.validated_data["email"]
+        new_password = serializer.validated_data["new_password"]
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "User with this email does not exist."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        user.set_password(new_password)
+        user.save()
+
+        return Response(
+            {"message": "Password reset successfully"},
+            status=status.HTTP_200_OK,
+        )
 

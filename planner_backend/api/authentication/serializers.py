@@ -113,3 +113,35 @@ class ChangePasswordSerializer(serializers.Serializer):
             raise serializers.ValidationError("Old password is incorrect.")
         return value
 
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    """Serializer for resetting password using email (forgot password flow)."""
+
+    email = serializers.EmailField(required=True)
+    new_password = serializers.CharField(
+        required=True,
+        write_only=True,
+        validators=[validate_password],
+        style={"input_type": "password"},
+    )
+    confirm_password = serializers.CharField(
+        required=True,
+        write_only=True,
+        style={"input_type": "password"},
+        label="Confirm New Password",
+    )
+
+    def validate(self, attrs):
+        """Validate that new passwords match."""
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError(
+                {"confirm_password": "Password fields didn't match."}
+            )
+        return attrs
+
+    def validate_email(self, value):
+        """Ensure a user with this email exists."""
+        if not User.objects.filter(email=value).exists():
+            raise serializers.ValidationError("User with this email does not exist.")
+        return value
+

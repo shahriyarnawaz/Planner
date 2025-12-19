@@ -1,8 +1,81 @@
 import React from 'react';
 
-const Signup = () => {
-  const handleSubmit = (event) => {
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
+
+const Signup = ({ onSignupSuccess }) => {
+  const [firstName, setFirstName] = React.useState('');
+  const [lastName, setLastName] = React.useState('');
+  const [email, setEmail] = React.useState('');
+  const [password, setPassword] = React.useState('');
+  const [confirmPassword, setConfirmPassword] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState('');
+
+  const handleSubmit = async (event) => {
     event.preventDefault();
+
+    setError('');
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/register/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          first_name: firstName,
+          last_name: lastName,
+          email,
+          password,
+          confirm_password: confirmPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const backendError = data?.error || data?.detail || data?.non_field_errors?.[0];
+        if (backendError) {
+          setError(backendError);
+        } else if (typeof data === 'object') {
+          const keys = Object.keys(data || {});
+          const firstKey = keys[0];
+          const firstMessage = firstKey ? (Array.isArray(data[firstKey]) ? data[firstKey][0] : data[firstKey]) : null;
+          setError(firstMessage || 'Registration failed. Please try again.');
+        } else {
+          setError('Registration failed. Please try again.');
+        }
+        setLoading(false);
+        return;
+      }
+
+      if (data?.tokens?.access) {
+        localStorage.setItem('accessToken', data.tokens.access);
+      }
+      if (data?.tokens?.refresh) {
+        localStorage.setItem('refreshToken', data.tokens.refresh);
+      }
+      if (data?.user) {
+        localStorage.setItem('user', JSON.stringify(data.user));
+      }
+
+      setLoading(false);
+
+      if (onSignupSuccess) {
+        onSignupSuccess();
+      }
+    } catch (err) {
+      console.error('Signup error', err);
+      setError('Something went wrong. Please check your connection and try again.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -54,17 +127,36 @@ const Signup = () => {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
-            <div className="space-y-1.5">
-              <label htmlFor="name" className="block text-sm font-medium text-heading">
-                Full name
-              </label>
-              <input
-                id="name"
-                type="text"
-                required
-                className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2.5 text-body placeholder:text-muted text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                placeholder="Enter your full name"
-              />
+            <div className="flex gap-4 flex-col md:flex-row">
+              <div className="space-y-1.5 md:flex-1">
+                <label htmlFor="firstName" className="block text-sm font-medium text-heading">
+                  First name
+                </label>
+                <input
+                  id="firstName"
+                  type="text"
+                  required
+                  className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2.5 text-body placeholder:text-muted text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                  placeholder="Enter your first name"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-1.5 md:flex-1">
+                <label htmlFor="lastName" className="block text-sm font-medium text-heading">
+                  Last name
+                </label>
+                <input
+                  id="lastName"
+                  type="text"
+                  required
+                  className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2.5 text-body placeholder:text-muted text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                  placeholder="Enter your last name"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                />
+              </div>
             </div>
 
             <div className="space-y-1.5">
@@ -77,6 +169,8 @@ const Signup = () => {
                 required
                 className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2.5 text-body placeholder:text-muted text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                 placeholder="you@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
 
@@ -90,6 +184,8 @@ const Signup = () => {
                 required
                 className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2.5 text-body placeholder:text-muted text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                 placeholder="Create a strong password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
               />
             </div>
 
@@ -103,14 +199,23 @@ const Signup = () => {
                 required
                 className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2.5 text-body placeholder:text-muted text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                 placeholder="Re-enter your password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
               />
             </div>
 
+            {error && (
+              <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="mt-2 w-full rounded-xl bg-primary hover:bg-primary-dark text-white py-3 text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200"
+              disabled={loading}
+              className="mt-2 w-full rounded-xl bg-primary hover:bg-primary-dark disabled:bg-primary/60 disabled:cursor-not-allowed text-white py-3 text-sm font-semibold shadow-md hover:shadow-lg transition-all duration-200"
             >
-              Create account
+              {loading ? 'Creating account...' : 'Create account'}
             </button>
           </form>
 

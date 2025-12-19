@@ -37,7 +37,7 @@ function App() {
               Back
             </button>
           </div>
-          <Signup />
+          <Signup onSignupSuccess={() => setCurrentPage('dashboard')} />
         </>
       )}
 

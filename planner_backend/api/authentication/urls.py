@@ -10,6 +10,7 @@ from .views import (
     LoginView,
     LogoutView,
     ChangePasswordView,
+    ForgotPasswordView,
 )
 
 urlpatterns = [
@@ -23,5 +24,6 @@ urlpatterns = [
     
     # Password Management
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
+    path('forgot-password/', ForgotPasswordView.as_view(), name='forgot-password'),
 ]
 

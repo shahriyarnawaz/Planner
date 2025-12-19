@@ -53,6 +53,13 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const monthLabel = `${monthNames[currentMonthDate.getMonth()]} ${currentMonthDate.getFullYear()}`;
 
+  const formatHumanDate = (dateKey) => {
+    if (!dateKey) return '';
+    const [year, month, day] = dateKey.split('-').map(Number);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${day} ${months[month - 1]} ${year}`;
+  };
+
   const weekRangeLabel = React.useMemo(() => {
     const start = currentWeekStart;
     const end = new Date(currentWeekStart);
@@ -61,17 +68,10 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
     const startKey = start.toISOString().slice(0, 10);
     const endKey = end.toISOString().slice(0, 10);
     return `${formatHumanDate(startKey)} – ${formatHumanDate(endKey)}`;
-  }, [currentWeekStart]);
+  }, [currentWeekStart, formatHumanDate]);
 
   const getTasksForDate = (dateKey) =>
     tasks.filter((task) => task.date === dateKey);
-
-  const formatHumanDate = (dateKey) => {
-    if (!dateKey) return '';
-    const [year, month, day] = dateKey.split('-').map(Number);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return `${day} ${months[month - 1]} ${year}`;
-  };
 
   const handlePrevMonth = () => {
     setCurrentMonthDate((prev) => {
