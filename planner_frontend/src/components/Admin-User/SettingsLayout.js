@@ -1,6 +1,5 @@
 import React from 'react';
-import AdminSidebar from './AdminSidebar';
-import AdminHeader from './AdminHeader';
+import AdminLayout from './AdminLayout';
 
 const SettingsLayout = ({ onNavigate }) => {
   const [workHours, setWorkHours] = React.useState('09:00 – 22:00');
@@ -15,16 +14,9 @@ const SettingsLayout = ({ onNavigate }) => {
   };
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* Sidebar */}
-      <AdminSidebar currentSection="settings" onNavigate={onNavigate} />
-
-      {/* Main content */}
-      <main className="flex-1 flex flex-col">
-        <AdminHeader />
-
-        <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
-          <div className="max-w-xl w-full">
+    <AdminLayout currentSection="settings" onNavigate={onNavigate}>
+      <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
+        <div className="max-w-xl w-full">
             <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold text-heading">Settings</h1>
@@ -118,8 +110,7 @@ const SettingsLayout = ({ onNavigate }) => {
             </form>
           </div>
         </section>
-      </main>
-    </div>
+    </AdminLayout>
   );
 };
 

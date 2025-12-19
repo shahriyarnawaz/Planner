@@ -1,6 +1,5 @@
 import React from 'react';
-import AdminSidebar from './AdminSidebar';
-import AdminHeader from './AdminHeader';
+import AdminLayout from './AdminLayout';
 import CreateTaskForm from './CreateTaskForm';
 
 const FilterDropdown = ({ label, options, isOpen, onToggle, onSelect }) => {
@@ -106,16 +105,9 @@ const TaskManagementLayout = ({ onNavigate }) => {
   ];
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* Sidebar */}
-      <AdminSidebar currentSection="tasks" onNavigate={onNavigate} />
-
-      {/* Main content */}
-      <main className="flex-1 flex flex-col">
-        <AdminHeader />
-
-        <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
-          <div className="max-w-4xl w-full">
+    <AdminLayout currentSection="tasks" onNavigate={onNavigate}>
+      <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
+        <div className="max-w-4xl w-full">
             {/* Header + Create button */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
               <h1 className="text-2xl md:text-3xl font-bold text-heading">Tasks</h1>
@@ -183,6 +175,7 @@ const TaskManagementLayout = ({ onNavigate }) => {
                 }
                 onSelect={() => setOpenFilter(null)}
               />
+
             </div>
 
             {/* Task list */}
@@ -286,6 +279,32 @@ const TaskManagementLayout = ({ onNavigate }) => {
                   </div>
                 </div>
               ))}
+            </div>
+
+            {/* Recurring Task Detected card */}
+            <div className="mt-4 max-w-4xl rounded-2xl bg-white shadow-sm border border-background-dark p-4 md:p-5">
+              <div className="flex items-start gap-3">
+                <div className="text-xl mt-0.5">🔁</div>
+                <div className="flex-1 text-sm text-body">
+                  <h2 className="text-sm font-semibold text-heading mb-1">Recurring Task Detected</h2>
+                  <p>You studied "Math" at 8 PM for the last 5 days.</p>
+                  <p className="mt-1">Would you like to make this a daily task?</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-xl bg-primary hover:bg-primary-dark px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200"
+                    >
+                      Make Recurring
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center justify-center rounded-xl border border-background-dark px-4 py-1.5 text-xs font-semibold text-heading bg-background-soft hover:bg-background-dark/40 transition-colors duration-150"
+                    >
+                      Ignore
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Create Task form (popup modal) */}
@@ -496,8 +515,7 @@ const TaskManagementLayout = ({ onNavigate }) => {
             )}
           </div>
         </section>
-      </main>
-    </div>
+    </AdminLayout>
   );
 };
 

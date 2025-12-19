@@ -1,6 +1,5 @@
 import React from 'react';
-import AdminSidebar from './AdminSidebar';
-import AdminHeader from './AdminHeader';
+import AdminLayout from './AdminLayout';
 
 const categoryData = [
   { name: 'Study', percent: 40 },
@@ -21,16 +20,9 @@ const InsightsLayout = ({ onNavigate }) => {
   const completionRate = 75;
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* Sidebar */}
-      <AdminSidebar currentSection="insights" onNavigate={onNavigate} />
-
-      {/* Main content */}
-      <main className="flex-1 flex flex-col">
-        <AdminHeader />
-
-        <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
-          <div className="max-w-5xl w-full">
+    <AdminLayout currentSection="insights" onNavigate={onNavigate}>
+      <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
+        <div className="max-w-5xl w-full">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
               <div>
@@ -129,8 +121,7 @@ const InsightsLayout = ({ onNavigate }) => {
             </div>
           </div>
         </section>
-      </main>
-    </div>
+    </AdminLayout>
   );
 };
 

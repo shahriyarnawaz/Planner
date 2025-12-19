@@ -1,6 +1,5 @@
 import React from 'react';
-import AdminSidebar from './AdminSidebar';
-import AdminHeader from './AdminHeader';
+import AdminLayout from './AdminLayout';
 
 const globalTemplates = [
   { id: 1, name: 'Morning Routine', taskCount: 5 },
@@ -17,16 +16,9 @@ const TemplatesLayout = ({ onNavigate }) => {
   const [activeTab, setActiveTab] = React.useState('templates'); // 'templates' | 'bookmarks'
 
   return (
-    <div className="min-h-screen flex bg-background">
-      {/* Sidebar */}
-      <AdminSidebar currentSection="templates" onNavigate={onNavigate} />
-
-      {/* Main content */}
-      <main className="flex-1 flex flex-col">
-        <AdminHeader />
-
-        <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
-          <div className="max-w-5xl w-full">
+    <AdminLayout currentSection="templates" onNavigate={onNavigate}>
+      <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
+        <div className="max-w-5xl w-full">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
               <div>
@@ -177,8 +169,7 @@ const TemplatesLayout = ({ onNavigate }) => {
             )}
           </div>
         </section>
-      </main>
-    </div>
+    </AdminLayout>
   );
 };
 
