@@ -85,6 +85,31 @@ const AdminDashboardLayout = ({ onNavigate }) => {
               </div>
             </div>
           </div>
+
+          <div className="mt-6 max-w-xl rounded-2xl bg-white shadow-sm border border-background-dark p-4 md:p-5">
+            <div className="flex items-start gap-3">
+              <div className="text-xl mt-0.5">🔁</div>
+              <div className="flex-1 text-sm text-body">
+                <h2 className="text-sm font-semibold text-heading mb-1">Recurring Task Detected</h2>
+                <p>You studied "Math" at 8 PM for the last 5 days.</p>
+                <p className="mt-1">Would you like to make this a daily task?</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-xl bg-primary hover:bg-primary-dark px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200"
+                  >
+                    Make Recurring
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-xl border border-background-dark px-4 py-1.5 text-xs font-semibold text-heading bg-background-soft hover:bg-background-dark/40 transition-colors duration-150"
+                  >
+                    Ignore
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
       </main>
     </div>

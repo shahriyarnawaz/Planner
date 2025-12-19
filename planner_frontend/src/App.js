@@ -5,13 +5,17 @@ import Signup from './components/Auth/signup';
 import Login from './components/Auth/login';
 import AdminUserDashboardPage from './pages/Admin-User/Dashboard';
 import AdminUserTasksPage from './pages/Admin-User/Tasks';
+import AdminUserCalendarPage from './pages/Admin-User/Calendar';
+import AdminUserTemplatesPage from './pages/Admin-User/Templates';
+import AdminUserInsightsPage from './pages/Admin-User/Insights';
+import AdminUserSettingsPage from './pages/Admin-User/Settings';
 
 function App() {
   const [currentPage, setCurrentPage] = React.useState('home');
 
   return (
     <div className="min-h-screen bg-background">
-      {currentPage !== 'dashboard' && currentPage !== 'tasks' && (
+      {currentPage !== 'dashboard' && currentPage !== 'tasks' && currentPage !== 'calendar' && currentPage !== 'templates' && currentPage !== 'insights' && currentPage !== 'settings' && (
         <Header
           onSignupClick={() => setCurrentPage('signup')}
           onLoginClick={() => setCurrentPage('login')}
@@ -56,7 +60,14 @@ function App() {
       {currentPage === 'dashboard' && (
         <AdminUserDashboardPage
           onNavigate={(section) => {
-            if (section === 'dashboard' || section === 'tasks') {
+            if (
+              section === 'dashboard' ||
+              section === 'tasks' ||
+              section === 'calendar' ||
+              section === 'templates' ||
+              section === 'insights' ||
+              section === 'settings'
+            ) {
               setCurrentPage(section);
             }
           }}
@@ -66,7 +77,82 @@ function App() {
       {currentPage === 'tasks' && (
         <AdminUserTasksPage
           onNavigate={(section) => {
-            if (section === 'dashboard' || section === 'tasks') {
+            if (
+              section === 'dashboard' ||
+              section === 'tasks' ||
+              section === 'calendar' ||
+              section === 'templates' ||
+              section === 'insights' ||
+              section === 'settings'
+            ) {
+              setCurrentPage(section);
+            }
+          }}
+        />
+      )}
+
+      {currentPage === 'calendar' && (
+        <AdminUserCalendarPage
+          onNavigate={(section) => {
+            if (
+              section === 'dashboard' ||
+              section === 'tasks' ||
+              section === 'calendar' ||
+              section === 'templates' ||
+              section === 'insights' ||
+              section === 'settings'
+            ) {
+              setCurrentPage(section);
+            }
+          }}
+        />
+      )}
+
+      {currentPage === 'templates' && (
+        <AdminUserTemplatesPage
+          onNavigate={(section) => {
+            if (
+              section === 'dashboard' ||
+              section === 'tasks' ||
+              section === 'calendar' ||
+              section === 'templates' ||
+              section === 'insights' ||
+              section === 'settings'
+            ) {
+              setCurrentPage(section);
+            }
+          }}
+        />
+      )}
+
+      {currentPage === 'insights' && (
+        <AdminUserInsightsPage
+          onNavigate={(section) => {
+            if (
+              section === 'dashboard' ||
+              section === 'tasks' ||
+              section === 'calendar' ||
+              section === 'templates' ||
+              section === 'insights' ||
+              section === 'settings'
+            ) {
+              setCurrentPage(section);
+            }
+          }}
+        />
+      )}
+
+      {currentPage === 'settings' && (
+        <AdminUserSettingsPage
+          onNavigate={(section) => {
+            if (
+              section === 'dashboard' ||
+              section === 'tasks' ||
+              section === 'calendar' ||
+              section === 'templates' ||
+              section === 'insights' ||
+              section === 'settings'
+            ) {
               setCurrentPage(section);
             }
           }}

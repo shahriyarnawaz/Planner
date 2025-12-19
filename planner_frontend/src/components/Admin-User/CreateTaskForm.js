@@ -61,6 +61,15 @@ const CreateTaskForm = () => {
         </div>
       </div>
 
+      {/* Suggested Time */}
+      <div className="flex items-center justify-between text-xs md:text-sm text-body border border-background-dark rounded-xl px-3 py-2.5 bg-background-soft">
+        <span className="font-medium text-heading">Suggested Time:</span>
+        <span className="flex items-center gap-1">
+          <span className="text-base">👉</span>
+          <span>8:00 PM – 9:00 PM (Based on history)</span>
+        </span>
+      </div>
+
       {/* Category & Priority */}
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-1.5">
