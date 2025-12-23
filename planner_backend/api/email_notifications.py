@@ -7,8 +7,21 @@ from django.core.mail import EmailMessage
 from django.conf import settings
 from datetime import datetime
 import logging
+from zoneinfo import ZoneInfo
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
+
+
+def _to_pk_time(dt):
+    pk_tz = ZoneInfo('Asia/Karachi')
+    if dt is None:
+        return None
+    # In this project we store datetimes in UTC (USE_TZ=True). If a datetime
+    # ever comes in naive (edge-case), assume UTC to avoid double-offset bugs.
+    if timezone.is_naive(dt):
+        dt = timezone.make_aware(dt, timezone.utc)
+    return timezone.localtime(dt, pk_tz)
 
 
 def send_task_creation_email(task):
@@ -16,6 +29,7 @@ def send_task_creation_email(task):
     Send email notification when a task is created
     """
     user = task.user
+    created_local = _to_pk_time(task.created_at)
     
     subject = f'New Task Created: {task.title}'
     
@@ -66,7 +80,7 @@ def send_task_creation_email(task):
             </div>
             
             <p style="color: #666; font-size: 14px;">
-                📅 Created on: {task.created_at.strftime("%B %d, %Y at %I:%M %p")}
+                📅 Created on: {(created_local or task.created_at).strftime("%B %d, %Y at %I:%M %p")}
             </p>
             
             <p style="color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px;">
@@ -193,6 +207,7 @@ def send_task_completion_email(task):
     Send email notification when a task is completed or time is over
     """
     user = task.user
+    updated_local = _to_pk_time(task.updated_at)
     
     if task.completed:
         subject = f'✅ Task Completed: {task.title}'
@@ -220,7 +235,7 @@ def send_task_completion_email(task):
             </div>
             
             <p style="color: #666; font-size: 14px;">
-                🕐 Completed on: {task.updated_at.strftime("%B %d, %Y at %I:%M %p")}
+                🕐 Completed on: {(updated_local or task.updated_at).strftime("%B %d, %Y at %I:%M %p")}
             </p>
             
             <p style="color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px;">

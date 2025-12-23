@@ -64,6 +64,37 @@ const TaskManagementLayout = ({ onNavigate }) => {
   const [editError, setEditError] = React.useState('');
   const filtersRef = React.useRef(null);
 
+  const parseTimeToMinutes = (value) => {
+    if (!value || typeof value !== 'string') return null;
+    const m = value.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  };
+
+  const minutesToTime = (totalMinutes) => {
+    const mins = ((totalMinutes % 1440) + 1440) % 1440;
+    const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+    const mm = String(mins % 60).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  const ensureMinDuration = (start, end) => {
+    const startMin = parseTimeToMinutes(start);
+    const endMinRaw = parseTimeToMinutes(end);
+    if (startMin == null || endMinRaw == null) return end;
+
+    let endMin = endMinRaw;
+    if (endMin <= startMin) {
+      endMin += 1440;
+    }
+
+    if (endMin - startMin < 15) {
+      endMin = startMin + 15;
+    }
+
+    return minutesToTime(endMin);
+  };
+
   React.useEffect(() => {
     const handleClickOutside = (event) => {
       if (filtersRef.current && !filtersRef.current.contains(event.target)) {
@@ -138,6 +169,43 @@ const TaskManagementLayout = ({ onNavigate }) => {
 
   React.useEffect(() => {
     if (editTask) {
+      const parseTimeTo24 = (value) => {
+        if (!value || typeof value !== 'string') return '';
+        const trimmed = value.trim();
+
+        // Already 24-hour: "HH:MM" or "HH:MM:SS"
+        const m24 = trimmed.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/);
+        if (m24) {
+          return `${m24[1].padStart(2, '0')}:${m24[2]}`;
+        }
+
+        // 12-hour: "H:MM AM" or "HH:MM PM"
+        const m12 = trimmed.match(/^(\d{1,2}):(\d{2})\s*([AP]M)$/i);
+        if (m12) {
+          let hours = Number(m12[1]);
+          const minutes = m12[2];
+          const ampm = m12[3].toUpperCase();
+          if (ampm === 'AM') {
+            if (hours === 12) hours = 0;
+          } else {
+            if (hours !== 12) hours += 12;
+          }
+          return `${String(hours).padStart(2, '0')}:${minutes}`;
+        }
+
+        return '';
+      };
+
+      const formatTimeTo12 = (value) => {
+        const t24 = parseTimeTo24(value);
+        if (!t24) return '';
+        const [hhStr, mm] = t24.split(':');
+        const hh = Number(hhStr);
+        const ampm = hh >= 12 ? 'PM' : 'AM';
+        const h12 = hh % 12 === 0 ? 12 : hh % 12;
+        return `${String(h12).padStart(2, '0')}:${mm} ${ampm}`;
+      };
+
       const normalizeDate = (value) => {
         if (!value || typeof value !== 'string') return '';
         if (value.includes('T')) {
@@ -146,13 +214,7 @@ const TaskManagementLayout = ({ onNavigate }) => {
         return value;
       };
 
-      const normalizeTime = (value) => {
-        if (!value || typeof value !== 'string') return '';
-        if (value.length >= 5 && value[2] === ':') {
-          return value.slice(0, 5);
-        }
-        return value;
-      };
+      const normalizeTime = (value) => parseTimeTo24(value);
 
       setEditTitle(editTask.title || '');
       setEditDate(normalizeDate(editTask.task_date));
@@ -164,6 +226,26 @@ const TaskManagementLayout = ({ onNavigate }) => {
       setEditError('');
     }
   }, [editTask]);
+
+  const formatTimeTo12 = (value) => {
+    if (!value || typeof value !== 'string') return '';
+    const trimmed = value.trim();
+
+    // If backend already sends "11:38 PM" just normalize spacing/case
+    const m12 = trimmed.match(/^(\d{1,2}:\d{2})\s*([AP]M)$/i);
+    if (m12) {
+      return `${m12[1]} ${m12[2].toUpperCase()}`;
+    }
+
+    // Parse 24-hour and convert
+    const m24 = trimmed.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/);
+    if (!m24) return trimmed;
+    const hh = Number(m24[1]);
+    const mm = m24[2];
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 === 0 ? 12 : hh % 12;
+    return `${String(h12).padStart(2, '0')}:${mm} ${ampm}`;
+  };
 
   const capitalize = (value) => {
     if (!value || typeof value !== 'string') return '';
@@ -432,7 +514,7 @@ const TaskManagementLayout = ({ onNavigate }) => {
                     <div className="flex items-center gap-4 text-xs">
                       <span className="text-text-secondary">
                         {task.start_time && task.end_time
-                          ? `${task.start_time} – ${task.end_time}`
+                          ? `${formatTimeTo12(task.start_time)} – ${formatTimeTo12(task.end_time)}`
                           : task.deadline || '--'}
                       </span>
                       <span
@@ -603,7 +685,7 @@ const TaskManagementLayout = ({ onNavigate }) => {
                       <span className="text-text-secondary">Time:</span>
                       <span className="text-body">
                         {viewTask.start_time && viewTask.end_time
-                          ? `${viewTask.start_time} – ${viewTask.end_time}`
+                          ? `${formatTimeTo12(viewTask.start_time)} – ${formatTimeTo12(viewTask.end_time)}`
                           : viewTask.deadline || '--'}
                       </span>
                     </div>
@@ -686,7 +768,11 @@ const TaskManagementLayout = ({ onNavigate }) => {
                       <input
                         type="time"
                         value={editStartTime}
-                        onChange={(e) => setEditStartTime(e.target.value)}
+                        onChange={(e) => {
+                          const nextStart = e.target.value;
+                          setEditStartTime(nextStart);
+                          setEditEndTime((prev) => ensureMinDuration(nextStart, prev));
+                        }}
                         className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2 text-body text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                       />
                     </div>
@@ -695,7 +781,10 @@ const TaskManagementLayout = ({ onNavigate }) => {
                       <input
                         type="time"
                         value={editEndTime}
-                        onChange={(e) => setEditEndTime(e.target.value)}
+                        onChange={(e) => {
+                          const nextEnd = e.target.value;
+                          setEditEndTime(ensureMinDuration(editStartTime, nextEnd));
+                        }}
                         className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2 text-body text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                       />
                     </div>

@@ -14,6 +14,37 @@ const CreateTaskForm = ({ onTaskCreated, onClose }) => {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
 
+  const parseTimeToMinutes = (value) => {
+    if (!value || typeof value !== 'string') return null;
+    const m = value.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  };
+
+  const minutesToTime = (totalMinutes) => {
+    const mins = ((totalMinutes % 1440) + 1440) % 1440;
+    const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+    const mm = String(mins % 60).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  const ensureMinDuration = (start, end) => {
+    const startMin = parseTimeToMinutes(start);
+    const endMinRaw = parseTimeToMinutes(end);
+    if (startMin == null || endMinRaw == null) return end;
+
+    let endMin = endMinRaw;
+    if (endMin <= startMin) {
+      endMin += 1440;
+    }
+
+    if (endMin - startMin < 15) {
+      endMin = startMin + 15;
+    }
+
+    return minutesToTime(endMin);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -186,7 +217,11 @@ const CreateTaskForm = ({ onTaskCreated, onClose }) => {
             type="time"
             className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2.5 text-body text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
             value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
+            onChange={(e) => {
+              const nextStart = e.target.value;
+              setStartTime(nextStart);
+              setEndTime((prevEnd) => ensureMinDuration(nextStart, prevEnd));
+            }}
           />
         </div>
         <div className="space-y-1.5">
@@ -198,7 +233,10 @@ const CreateTaskForm = ({ onTaskCreated, onClose }) => {
             type="time"
             className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2.5 text-body text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
             value={endTime}
-            onChange={(e) => setEndTime(e.target.value)}
+            onChange={(e) => {
+              const nextEnd = e.target.value;
+              setEndTime(ensureMinDuration(startTime, nextEnd));
+            }}
           />
         </div>
       </div>

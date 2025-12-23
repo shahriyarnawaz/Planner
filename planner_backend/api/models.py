@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+from zoneinfo import ZoneInfo
 
 
 class UserProfile(models.Model):
@@ -134,6 +135,7 @@ class Task(models.Model):
         from django.core.exceptions import ValidationError
         from datetime import datetime, timedelta
         from django.utils import timezone
+        pk_tz = ZoneInfo('Asia/Karachi')
         
         # Validate time slot
         if self.start_time and self.end_time:
@@ -157,9 +159,9 @@ class Task(models.Model):
             raise ValidationError('Both start_time and end_time must be provided together')
 
         if self.pk is None and not self.completed and self.task_date and self.start_time:
-            now = timezone.now()
-            today = now.date()
-            current_time = now.time()
+            now_local = timezone.localtime(timezone.now(), pk_tz)
+            today = now_local.date()
+            current_time = now_local.time()
             if self.task_date < today:
                 raise ValidationError({'task_date': 'Task date cannot be in the past'})
             if self.task_date == today and self.start_time <= current_time:
@@ -169,10 +171,11 @@ class Task(models.Model):
         """Override save to set deadline from slots and run validation"""
         from datetime import datetime
         from django.utils import timezone
+        pk_tz = ZoneInfo('Asia/Karachi')
         # Always set deadline from slots
         if self.task_date and self.end_time:
             naive_deadline = datetime.combine(self.task_date, self.end_time)
-            self.deadline = timezone.make_aware(naive_deadline, timezone.get_current_timezone())
+            self.deadline = timezone.make_aware(naive_deadline, pk_tz)
         self.clean()
         super().save(*args, **kwargs)
 
@@ -186,6 +189,7 @@ class Task(models.Model):
     def schedule_reminders(self, min_gap_minutes=10):
         from datetime import timedelta
         from django.utils import timezone
+        pk_tz = ZoneInfo('Asia/Karachi')
 
         if not self.task_date or not self.start_time or not self.created_at:
             return
@@ -194,7 +198,7 @@ class Task(models.Model):
         min_allowed = self.created_at + timedelta(minutes=min_gap_minutes)
 
         naive_start = timezone.datetime.combine(self.task_date, self.start_time)
-        start_at = timezone.make_aware(naive_start, timezone.get_current_timezone())
+        start_at = timezone.make_aware(naive_start, pk_tz)
 
         TaskReminder.objects.filter(task=self, sent_at__isnull=True).delete()
 
