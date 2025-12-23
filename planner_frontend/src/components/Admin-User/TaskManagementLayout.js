@@ -169,6 +169,11 @@ const TaskManagementLayout = ({ onNavigate }) => {
 
   React.useEffect(() => {
     if (editTask) {
+      if (editTask.completed) {
+        setEditError('Completed tasks cannot be edited. You can only view or delete them.');
+        setEditTask(null);
+        return;
+      }
       const parseTimeTo24 = (value) => {
         if (!value || typeof value !== 'string') return '';
         const trimmed = value.trim();
@@ -257,35 +262,7 @@ const TaskManagementLayout = ({ onNavigate }) => {
   };
 
   const handleToggleComplete = async (taskId) => {
-    const accessToken = localStorage.getItem('accessToken');
-    if (!accessToken) {
-      setTasksError('You must be logged in to update tasks.');
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/tasks/${taskId}/toggle-complete/`, {
-        method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        const backendError = data?.error || data?.detail;
-        setTasksError(backendError || 'Failed to update task.');
-        return;
-      }
-
-      if (data?.task) {
-        setTasks((prev) => prev.map((task) => (task.id === data.task.id ? data.task : task)));
-      }
-    } catch (err) {
-      console.error('Toggle complete error', err);
-      setTasksError('Something went wrong while updating the task.');
-    }
+    setTasksError('Task completion is automatic. You cannot mark tasks as completed manually.');
   };
 
   const handleConfirmDelete = async () => {
@@ -328,6 +305,12 @@ const TaskManagementLayout = ({ onNavigate }) => {
 
   const handleUpdateTask = async () => {
     if (!editTask) return;
+
+    if (editTask.completed) {
+      setEditError('Completed tasks cannot be edited. You can only view or delete them.');
+      setEditTask(null);
+      return;
+    }
 
     const accessToken = localStorage.getItem('accessToken');
     if (!accessToken) {
@@ -500,8 +483,8 @@ const TaskManagementLayout = ({ onNavigate }) => {
                       <input
                         type="checkbox"
                         checked={!!task.completed}
-                        onChange={() => handleToggleComplete(task.id)}
-                        className="h-4 w-4 rounded border-background-dark text-primary focus:ring-primary-light"
+                        disabled
+                        className="h-4 w-4 rounded border-background-dark text-primary focus:ring-primary-light opacity-60 cursor-not-allowed"
                       />
                       <span
                         className={
@@ -512,6 +495,15 @@ const TaskManagementLayout = ({ onNavigate }) => {
                       </span>
                     </div>
                     <div className="flex items-center gap-4 text-xs">
+                      <span
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] uppercase tracking-wide border ${
+                          task.completed
+                            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                            : 'border-amber-200 bg-amber-50 text-amber-700'
+                        }`}
+                      >
+                        {task.completed ? 'Completed' : 'Pending'}
+                      </span>
                       <span className="text-text-secondary">
                         {task.start_time && task.end_time
                           ? `${formatTimeTo12(task.start_time)} – ${formatTimeTo12(task.end_time)}`
@@ -550,13 +542,20 @@ const TaskManagementLayout = ({ onNavigate }) => {
                         <button
                           type="button"
                           onClick={() => {
+                            if (task.completed) return;
                             setEditTask(task);
                             setViewTask(null);
                             setDeleteTask(null);
                             setShowCreateForm(false);
                           }}
-                          className="h-7 w-7 rounded-full border border-olive/70 flex items-center justify-center text-[13px] text-olive hover:bg-olive hover:text-white transition-colors"
+                          disabled={!!task.completed}
+                          className={`h-7 w-7 rounded-full border flex items-center justify-center text-[13px] transition-colors ${
+                            task.completed
+                              ? 'border-background-dark/40 text-muted opacity-60 cursor-not-allowed'
+                              : 'border-olive/70 text-olive hover:bg-olive hover:text-white'
+                          }`}
                           aria-label="Edit task"
+                          title={task.completed ? 'Completed tasks cannot be edited' : 'Edit task'}
                         >
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
