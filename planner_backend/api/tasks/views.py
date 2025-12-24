@@ -319,17 +319,12 @@ class TaskToggleCompleteView(APIView):
         
         # Toggle completion status
         was_completed = task.completed
+        was_completion_email_sent = task.completion_email_sent
         task.completed = not task.completed
         task.save()
-        
-        # Send completion email if task is now completed and email hasn't been sent
-        email_sent = False
-        if task.completed and not was_completed and not task.completion_email_sent:
-            try:
-                send_task_completion_email(task)
-                email_sent = True
-            except Exception as e:
-                print(f"Failed to send completion email: {e}")
+
+        task.refresh_from_db(fields=['completion_email_sent'])
+        email_sent = bool(task.completed and not was_completed and not was_completion_email_sent and task.completion_email_sent)
         
         response_serializer = TaskSerializer(task)
         

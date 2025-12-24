@@ -171,13 +171,29 @@ class Task(models.Model):
         """Override save to set deadline from slots and run validation"""
         from datetime import datetime
         from django.utils import timezone
+        from api.email_notifications import send_task_completion_email
         pk_tz = ZoneInfo('Asia/Karachi')
+
+        previous_completed = None
+        previous_completion_email_sent = None
+        if self.pk:
+            previous_state = Task.objects.filter(pk=self.pk).values('completed', 'completion_email_sent').first()
+            if previous_state:
+                previous_completed = previous_state['completed']
+                previous_completion_email_sent = previous_state['completion_email_sent']
+
         # Always set deadline from slots
         if self.task_date and self.end_time:
             naive_deadline = datetime.combine(self.task_date, self.end_time)
             self.deadline = timezone.make_aware(naive_deadline, pk_tz)
         self.clean()
         super().save(*args, **kwargs)
+
+        if (previous_completed is False and self.completed is True and not self.completion_email_sent and not previous_completion_email_sent):
+            try:
+                send_task_completion_email(self)
+            except Exception as e:
+                print(f"❌ Failed to send completion email for Task(id={self.id}): {e}")
 
         if self.completed:
             TaskReminder.objects.filter(task=self, sent_at__isnull=True).delete()

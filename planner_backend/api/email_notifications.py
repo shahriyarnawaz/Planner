@@ -257,14 +257,29 @@ def send_task_completion_email(task):
         print(f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("-"*60)
         
-        email = EmailMessage(
-            subject=subject,
-            body=html_content,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        email.content_subtype = "html"
-        email.send()
+        max_attempts = 3
+        last_error = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                email = EmailMessage(
+                    subject=subject,
+                    body=html_content,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[user.email]
+                )
+                email.content_subtype = "html"
+                email.send()
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                print(f"❌ Email send attempt {attempt}/{max_attempts} failed: {e}")
+                if attempt < max_attempts:
+                    import time
+                    time.sleep(2)
+
+        if last_error is not None:
+            raise last_error
         
         task.completion_email_sent = True
         task.save(update_fields=['completion_email_sent'])
