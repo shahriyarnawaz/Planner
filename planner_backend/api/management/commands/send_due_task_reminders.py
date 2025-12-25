@@ -7,6 +7,7 @@ from datetime import timedelta
 
 from django.core.management.base import BaseCommand
 from django.utils import timezone
+from zoneinfo import ZoneInfo
 
 from api.email_notifications import send_task_reminder_email
 from api.models import TaskReminder
@@ -19,8 +20,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--window-minutes',
             type=int,
-            default=5,
-            help='Send reminders scheduled within the last N minutes as well (default: 5)',
+            default=0,
+            help='If > 0, only send reminders scheduled within the last N minutes as well. If 0, send ALL due unsent reminders (recommended).',
         )
         parser.add_argument(
             '--dry-run',
@@ -31,29 +32,37 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         window_minutes = options['window_minutes']
         dry_run = options['dry_run']
+        pk_tz = ZoneInfo('Asia/Karachi')
         now = timezone.now()
-        window_start = now - timedelta(minutes=window_minutes)
+        window_start = now - timedelta(minutes=window_minutes) if window_minutes and window_minutes > 0 else None
 
-        local_now = timezone.localtime(now)
-        local_window_start = timezone.localtime(window_start)
+        local_now = timezone.localtime(now, pk_tz)
+        local_window_start = timezone.localtime(window_start, pk_tz) if window_start is not None else None
 
         self.stdout.write("\n" + "=" * 60)
         self.stdout.write(self.style.SUCCESS("SENDING DUE TASK REMINDERS"))
         self.stdout.write("=" * 60)
         self.stdout.write(f"Current time (local): {local_now.strftime('%Y-%m-%d %I:%M %p')}")
-        self.stdout.write(f"Window (local): {local_window_start.strftime('%Y-%m-%d %I:%M %p')} to {local_now.strftime('%Y-%m-%d %I:%M %p')}")
+        if local_window_start is not None:
+            self.stdout.write(f"Window (local): {local_window_start.strftime('%Y-%m-%d %I:%M %p')} to {local_now.strftime('%Y-%m-%d %I:%M %p')}")
+        else:
+            self.stdout.write("Window (local): ALL DUE UNSENT REMINDERS")
         if dry_run:
             self.stdout.write(self.style.WARNING("DRY RUN: emails will NOT be sent"))
         self.stdout.write("-" * 60)
 
+        base_filter = {
+            'sent_at__isnull': True,
+            'scheduled_for__lte': now,
+            'task__completed': False,
+        }
+
+        if window_start is not None:
+            base_filter['scheduled_for__gte'] = window_start
+
         due_reminders = (
             TaskReminder.objects
-            .filter(
-                sent_at__isnull=True,
-                scheduled_for__lte=now,
-                scheduled_for__gte=window_start,
-                task__completed=False,
-            )
+            .filter(**base_filter)
             .select_related('task', 'task__user')
             .order_by('scheduled_for')
         )
@@ -71,15 +80,18 @@ class Command(BaseCommand):
 
         for reminder in due_reminders:
             task = reminder.task
+            scheduled_local = timezone.localtime(reminder.scheduled_for, pk_tz)
+            self.stdout.write(f"  Reminder ID: {reminder.id}")
+            self.stdout.write(f"  Task ID: {task.id}")
             self.stdout.write(f"  Task: {task.title}")
-            self.stdout.write(f"     User: {task.user.email}")
-            self.stdout.write(f"     Reminder type: {reminder.reminder_type}")
-            self.stdout.write(f"     Scheduled for (local): {timezone.localtime(reminder.scheduled_for).strftime('%Y-%m-%d %I:%M %p')}")
+            self.stdout.write(f"  User: {task.user.email}")
+            self.stdout.write(f"  Reminder type: {reminder.reminder_type}")
+            self.stdout.write(f"  Scheduled for (PK): {scheduled_local.strftime('%Y-%m-%d %I:%M %p')}")
 
             try:
                 if dry_run:
                     sent += 1
-                    self.stdout.write(self.style.SUCCESS("     Would send (dry-run)"))
+                    self.stdout.write(self.style.SUCCESS("  ✅ WOULD SEND (dry-run)"))
                 else:
                     sent_at = send_task_reminder_email(
                         task,
@@ -90,13 +102,14 @@ class Command(BaseCommand):
                         reminder.sent_at = sent_at
                         reminder.save(update_fields=['sent_at'])
                         sent += 1
-                        self.stdout.write(self.style.SUCCESS(f"     Sent at (local): {timezone.localtime(sent_at).strftime('%Y-%m-%d %I:%M %p')}"))
+                        sent_at_local = timezone.localtime(sent_at, pk_tz)
+                        self.stdout.write(self.style.SUCCESS(f"  ✅ SENT (PK): {sent_at_local.strftime('%Y-%m-%d %I:%M %p')}"))
                     else:
                         failed += 1
-                        self.stdout.write(self.style.ERROR("     Not sent"))
+                        self.stdout.write(self.style.ERROR("  ❌ FAILED: send_task_reminder_email returned None"))
             except Exception as e:
                 failed += 1
-                self.stdout.write(self.style.ERROR(f"     Failed: {e}"))
+                self.stdout.write(self.style.ERROR(f"  ❌ FAILED: {e}"))
 
             self.stdout.write("")
 

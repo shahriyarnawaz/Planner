@@ -310,35 +310,35 @@ def send_task_reminder_email(task, reminder_type=None, scheduled_for=None):
     
     # Calculate time until deadline
     from django.utils import timezone
+    pk_tz = ZoneInfo('Asia/Karachi')
     now = timezone.now()
-    local_now = timezone.localtime(now)
-    local_deadline = timezone.localtime(task.deadline) if task.deadline else None
+    local_now = timezone.localtime(now, pk_tz)
+    local_deadline = timezone.localtime(task.deadline, pk_tz) if task.deadline else None
     local_start = None
     if task.task_date and task.start_time:
         naive_start = timezone.datetime.combine(task.task_date, task.start_time)
-        start_at = timezone.make_aware(naive_start, timezone.get_current_timezone())
-        local_start = timezone.localtime(start_at)
+        start_at = timezone.make_aware(naive_start, pk_tz)
+        local_start = timezone.localtime(start_at, pk_tz)
         time_until = start_at - now
     else:
         time_until = task.deadline - now
-    
-    hours_until = int(time_until.total_seconds() / 3600)
-    minutes_until = int((time_until.total_seconds() % 3600) / 60)
-    
-    if hours_until > 0:
-        time_str = f"{hours_until} hour(s) and {minutes_until} minute(s)"
-    else:
-        time_str = f"{minutes_until} minute(s)"
-    
-    reminder_label = "Reminder"
-    if reminder_type == 'day_before':
-        reminder_label = '1 Day Reminder'
-    elif reminder_type == 'hour_before':
-        reminder_label = '1 Hour Reminder'
-    elif reminder_type == 'minutes_15':
-        reminder_label = '15 Minute Reminder'
 
-    subject = f'{reminder_label}: {task.title} - Starting Soon'
+    total_seconds = int(time_until.total_seconds())
+    if total_seconds <= 0:
+        started_seconds_ago = abs(total_seconds)
+        started_minutes_ago = int(round(started_seconds_ago / 60))
+        if started_minutes_ago <= 0:
+            time_str = "starting now"
+        else:
+            time_str = f"started {started_minutes_ago} minute(s) ago"
+    else:
+        hours_until = total_seconds // 3600
+        minutes_until = (total_seconds % 3600) // 60
+        if hours_until > 0:
+            time_str = f"{hours_until} hour(s) and {minutes_until} minute(s)"
+        else:
+            time_str = f"{minutes_until} minute(s)"
+      
     
     # HTML email body
     time_slot_info = ""
@@ -404,7 +404,7 @@ def send_task_reminder_email(task, reminder_type=None, scheduled_for=None):
         print(f"Subject: {subject}")
         print(f"Task: {task.title}")
         if scheduled_for is not None:
-            print(f"Scheduled for: {timezone.localtime(scheduled_for).strftime('%Y-%m-%d %I:%M %p')}")
+            print(f"Scheduled for: {timezone.localtime(scheduled_for, pk_tz).strftime('%Y-%m-%d %I:%M %p')}")
         if local_start is not None:
             print(f"Starts At: {local_start.strftime('%Y-%m-%d %I:%M %p')}")
         elif local_deadline is not None:
@@ -413,14 +413,29 @@ def send_task_reminder_email(task, reminder_type=None, scheduled_for=None):
         print(f"Time: {local_now.strftime('%Y-%m-%d %I:%M %p')}")
         print("-"*60)
         
-        email = EmailMessage(
-            subject=subject,
-            body=html_content,
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            to=[user.email]
-        )
-        email.content_subtype = "html"
-        email.send()
+        max_attempts = 3
+        last_error = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                email = EmailMessage(
+                    subject=subject,
+                    body=html_content,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    to=[user.email]
+                )
+                email.content_subtype = "html"
+                email.send()
+                last_error = None
+                break
+            except Exception as e:
+                last_error = e
+                print(f"❌ Reminder email send attempt {attempt}/{max_attempts} failed: {e}")
+                if attempt < max_attempts:
+                    import time
+                    time.sleep(2)
+
+        if last_error is not None:
+            raise last_error
 
         if reminder_type is None:
             task.reminder_email_sent = True

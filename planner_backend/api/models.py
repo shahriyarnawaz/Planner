@@ -202,9 +202,10 @@ class Task(models.Model):
         if self.deadline:
             self.schedule_reminders()
 
-    def schedule_reminders(self, min_gap_minutes=10):
+    def schedule_reminders(self, min_gap_minutes=1):
         from datetime import timedelta
         from django.utils import timezone
+        from django.conf import settings
         pk_tz = ZoneInfo('Asia/Karachi')
 
         if not self.task_date or not self.start_time or not self.created_at:
@@ -227,13 +228,22 @@ class Task(models.Model):
         reminders_to_create = []
         for reminder_type, scheduled_for in candidates:
             if scheduled_for <= now:
+                if getattr(settings, 'DEBUG', False):
+                    print(f"REMINDER SKIP (past): Task(id={self.id}), type={reminder_type}, scheduled_for={scheduled_for}")
                 continue
             if scheduled_for < min_allowed:
+                if getattr(settings, 'DEBUG', False):
+                    print(f"REMINDER SKIP (too-soon-after-create): Task(id={self.id}), type={reminder_type}, scheduled_for={scheduled_for}, min_allowed={min_allowed}")
                 continue
             reminders_to_create.append(TaskReminder(task=self, reminder_type=reminder_type, scheduled_for=scheduled_for))
 
         if reminders_to_create:
             TaskReminder.objects.bulk_create(reminders_to_create)
+            if getattr(settings, 'DEBUG', False):
+                print(f"REMINDER SCHEDULED: Task(id={self.id}) created {len(reminders_to_create)} reminder(s)")
+        else:
+            if getattr(settings, 'DEBUG', False):
+                print(f"REMINDER SCHEDULED: Task(id={self.id}) created 0 reminder(s)")
 
 
 class TaskReminder(models.Model):
