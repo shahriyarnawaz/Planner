@@ -24,6 +24,80 @@ def _to_pk_time(dt):
     return timezone.localtime(dt, pk_tz)
 
 
+def send_signup_approval_request_email(user):
+    super_admin_email = 'superadmin@planner.com'
+
+    subject = 'New signup pending approval'
+    body = (
+        f"A new user has signed up and is pending approval.\n\n"
+        f"Name: {user.first_name} {user.last_name}\n"
+        f"Email: {user.email}\n\n"
+        f"Please review and approve this user in the System Admin dashboard."
+    )
+
+    try:
+        email = EmailMessage(
+            subject=subject,
+            body=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[super_admin_email],
+        )
+        email.send()
+        return True
+    except Exception as e:
+        print(f"❌ Failed to send signup approval request email: {e}")
+        return False
+
+
+def send_user_approved_email(user):
+    subject = '✅ Your Planner account has been approved'
+    body = (
+        f"Hi {user.first_name},\n\n"
+        f"Your account has been approved by the Super Admin. You can now login to Planner.\n\n"
+        f"Email: {user.email}\n\n"
+        f"Thank you."
+    )
+
+    try:
+        email = EmailMessage(
+            subject=subject,
+            body=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        email.send()
+        return True
+    except Exception as e:
+        print(f"❌ Failed to send user approved email: {e}")
+        return False
+
+
+def send_user_disabled_email(user, reason=None):
+    subject = '⚠️ Your Planner account has been disabled'
+    reason_text = reason.strip() if isinstance(reason, str) and reason.strip() else None
+
+    body = (
+        f"Hi {user.first_name},\n\n"
+        f"Your account has been disabled by the Super Admin.\n"
+        + (f"\nReason: {reason_text}\n" if reason_text else "")
+        + "\nFor updates, please check your email or contact support.\n\n"
+        + "Thank you."
+    )
+
+    try:
+        email = EmailMessage(
+            subject=subject,
+            body=body,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+        email.send()
+        return True
+    except Exception as e:
+        print(f"❌ Failed to send user disabled email: {e}")
+        return False
+
+
 def send_task_creation_email(task):
     """
     Send email notification when a task is created
@@ -218,6 +292,27 @@ def send_task_completion_email(task):
         status_message = 'time is over'
         status_color = '#FF9800'
     
+    time_slot_info = ""
+    if task.task_date and task.start_time and task.end_time:
+        time_slot_info = f"""
+                    <tr>
+                        <td style="padding: 8px; background: #f5f5f5;"><strong>Date:</strong></td>
+                        <td style="padding: 8px;">{task.task_date.strftime("%B %d, %Y")}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; background: #f5f5f5;"><strong>Time:</strong></td>
+                        <td style="padding: 8px;">{task.start_time.strftime("%I:%M %p")} - {task.end_time.strftime("%I:%M %p")}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; background: #f5f5f5;"><strong>Duration:</strong></td>
+                        <td style="padding: 8px;">{task.calculated_duration} minutes</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; background: #f5f5f5;"><strong>Deadline:</strong></td>
+                        <td style="padding: 8px;">{task.deadline.strftime("%B %d, %Y at %I:%M %p") if task.deadline else 'N/A'}</td>
+                    </tr>
+        """
+
     html_content = f"""
     <html>
     <body style="font-family: Arial, sans-serif; padding: 20px;">
@@ -232,14 +327,26 @@ def send_task_completion_email(task):
                 <p style="padding: 15px; background: #f0f0f0; border-left: 4px solid {status_color}; margin: 15px 0;">
                     <strong>Status:</strong> This task has been {status_message}!
                 </p>
+
+                <table style="width: 100%; margin: 15px 0;">
+                    <tr>
+                        <td style="padding: 8px; background: #f5f5f5;"><strong>Priority:</strong></td>
+                        <td style="padding: 8px;">{task.get_priority_display()}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 8px; background: #f5f5f5;"><strong>Category:</strong></td>
+                        <td style="padding: 8px;">{task.get_category_display()}</td>
+                    </tr>
+                    {time_slot_info}
+                </table>
             </div>
             
             <p style="color: #666; font-size: 14px;">
-                🕐 Completed on: {(updated_local or task.updated_at).strftime("%B %d, %Y at %I:%M %p")}
+                Completed on: {(updated_local or task.updated_at).strftime("%B %d, %Y at %I:%M %p")}
             </p>
             
             <p style="color: #999; font-size: 12px; margin-top: 30px; border-top: 1px solid #ddd; padding-top: 15px;">
-                Great job staying organized! Keep up the good work! 💪
+                Great job staying organized! Keep up the good work! 
             </p>
         </div>
     </body>

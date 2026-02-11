@@ -37,24 +37,36 @@ class Command(BaseCommand):
         today_local = now_local.date()
         current_time_local = now_local.time()
 
-        due_tasks = (
+        due_tasks_qs = (
             Task.objects
             .filter(
                 completed=False,
             )
             .filter(
                 Q(deadline__isnull=False, deadline__lte=now)
-                | Q(deadline__isnull=True, task_date=today_local, end_time__isnull=False, end_time__lte=current_time_local)
+                | Q(
+                    deadline__isnull=True,
+                    task_date__lt=today_local,
+                    end_time__isnull=False,
+                )
+                | Q(
+                    deadline__isnull=True,
+                    task_date=today_local,
+                    end_time__isnull=False,
+                    end_time__lte=current_time_local,
+                )
             )
             .select_related('user')
             .order_by('deadline', 'task_date', 'end_time')
         )
 
+        due_tasks = list(due_tasks_qs)
+
         self.stdout.write(
-            f"[{now_local.strftime('%Y-%m-%d %H:%M:%S')}] Due tasks found: {due_tasks.count()}"
+            f"[{now_local.strftime('%Y-%m-%d %H:%M:%S')}] Due tasks found: {len(due_tasks)}"
         )
 
-        if due_tasks.count() == 0:
+        if len(due_tasks) == 0:
             # Helpful debug: show the next upcoming task end time (local)
             next_by_deadline = (
                 Task.objects

@@ -71,9 +71,10 @@ class UserWithRoleSerializer(serializers.ModelSerializer):
     Serializer to display user information with role
     """
     role = serializers.CharField(source='profile.role', read_only=True)
+    is_approved = serializers.BooleanField(source='profile.is_approved', read_only=True)
     created_at = serializers.DateTimeField(source='profile.created_at', read_only=True)
     
     class Meta:
         model = User
-        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'is_active', 'date_joined', 'created_at']
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'is_active', 'is_approved', 'date_joined', 'created_at']
 

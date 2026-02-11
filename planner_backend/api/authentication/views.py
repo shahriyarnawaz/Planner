@@ -7,8 +7,9 @@ from rest_framework import status, generics, permissions
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+
+from api.email_notifications import send_signup_approval_request_email, send_user_approved_email
 
 from .serializers import (
     RegisterSerializer,
@@ -43,10 +44,9 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        
-        # Generate JWT tokens for the new user
-        refresh = RefreshToken.for_user(user)
-        
+
+        send_signup_approval_request_email(user)
+
         return Response({
             'user': {
                 'id': user.id,
@@ -54,12 +54,9 @@ class RegisterView(generics.CreateAPIView):
                 'first_name': user.first_name,
                 'last_name': user.last_name,
                 'role': user.profile.role if hasattr(user, 'profile') else 'user',
+                'is_approved': user.profile.is_approved if hasattr(user, 'profile') else False,
             },
-            'message': 'User registered successfully',
-            'tokens': {
-                'refresh': str(refresh),
-                'access': str(refresh.access_token),
-            }
+            'message': 'Signup request submitted. Your account is pending Super Admin approval. You will receive an email once approved.',
         }, status=status.HTTP_201_CREATED)
 
 
@@ -86,37 +83,44 @@ class LoginView(APIView):
         
         email = serializer.validated_data['email']
         password = serializer.validated_data['password']
-        
-        # Authenticate user using email (stored as username)
-        user = authenticate(username=email, password=password)
-        
-        if user is not None:
-            if user.is_active:
-                # Generate JWT tokens
-                refresh = RefreshToken.for_user(user)
-                
-                return Response({
-                    'user': {
-                        'id': user.id,
-                        'email': user.email,
-                        'first_name': user.first_name,
-                        'last_name': user.last_name,
-                        'role': user.profile.role if hasattr(user, 'profile') else 'user',
-                    },
-                    'message': 'Login successful',
-                    'tokens': {
-                        'refresh': str(refresh),
-                        'access': str(refresh.access_token),
-                    }
-                }, status=status.HTTP_200_OK)
-            else:
-                return Response({
-                    'error': 'Account is disabled'
-                }, status=status.HTTP_403_FORBIDDEN)
-        else:
+
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            user = None
+
+        if user is None or not user.check_password(password):
             return Response({
                 'error': 'Invalid email or password'
             }, status=status.HTTP_401_UNAUTHORIZED)
+
+        if hasattr(user, 'profile') and not user.profile.is_approved:
+            return Response({
+                'error': "You can't login until the Super Admin approves your account. For approval updates, please check your email."
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        if not user.is_active:
+            return Response({
+                'error': 'You are disabled by the Super Admin. For updates, please check your email.'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        refresh = RefreshToken.for_user(user)
+
+        return Response({
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'role': user.profile.role if hasattr(user, 'profile') else 'user',
+                'is_approved': user.profile.is_approved if hasattr(user, 'profile') else True,
+            },
+            'message': 'Login successful',
+            'tokens': {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token),
+            }
+        }, status=status.HTTP_200_OK)
 
 
 class LogoutView(APIView):

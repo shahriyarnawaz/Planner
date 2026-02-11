@@ -6,17 +6,19 @@ Run this command periodically (e.g., every 15 minutes) using cron or scheduler
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from api.models import Task
-from api.email_notifications import send_task_completion_email
 
 
 class Command(BaseCommand):
     help = 'Check for tasks whose time is over and send email notifications'
 
     def handle(self, *args, **kwargs):
+        pk_tz = ZoneInfo('Asia/Karachi')
         now = timezone.now()
-        today = now.date()
-        current_time = now.time()
+        now_local = timezone.localtime(now, pk_tz)
+        today = now_local.date()
+        current_time = now_local.time()
         
         # Find tasks whose end time has passed
         tasks_to_notify = Task.objects.filter(
@@ -30,8 +32,8 @@ class Command(BaseCommand):
         
         for task in tasks_to_notify:
             try:
-                # Send "time over" notification
-                send_task_completion_email(task)
+                task.completed = True
+                task.save(update_fields=['completed', 'updated_at'])
                 notifications_sent += 1
                 
                 self.stdout.write(

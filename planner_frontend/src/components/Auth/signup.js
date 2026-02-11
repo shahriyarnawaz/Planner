@@ -10,11 +10,13 @@ const Signup = ({ onSignupSuccess }) => {
   const [confirmPassword, setConfirmPassword] = React.useState('');
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
+  const [successMessage, setSuccessMessage] = React.useState('');
 
   const handleSubmit = async (event) => {
     event.preventDefault();
 
     setError('');
+    setSuccessMessage('');
 
     if (password !== confirmPassword) {
       setError('Passwords do not match.');
@@ -38,13 +40,34 @@ const Signup = ({ onSignupSuccess }) => {
         }),
       });
 
-      const data = await response.json();
+      const rawText = await response.text();
+      let data = null;
+      try {
+        data = rawText ? JSON.parse(rawText) : null;
+      } catch (parseErr) {
+        data = null;
+      }
 
       if (!response.ok) {
+        if (!data) {
+          const preview = (rawText || '').slice(0, 180);
+          setError(
+            `Registration failed (non-JSON response). Check API URL/backend server. Response: ${preview}`
+          );
+          setLoading(false);
+          return;
+        }
+
         const backendError = data?.error || data?.detail || data?.non_field_errors?.[0];
         if (backendError) {
           setError(backendError);
         } else if (typeof data === 'object') {
+          if (Array.isArray(data?.email) && String(data.email[0] || '').toLowerCase().includes('unique')) {
+            setError('This email is already registered. Please use a different email.');
+            setLoading(false);
+            return;
+          }
+
           const keys = Object.keys(data || {});
           const firstKey = keys[0];
           const firstMessage = firstKey ? (Array.isArray(data[firstKey]) ? data[firstKey][0] : data[firstKey]) : null;
@@ -56,21 +79,23 @@ const Signup = ({ onSignupSuccess }) => {
         return;
       }
 
-      if (data?.tokens?.access) {
-        localStorage.setItem('accessToken', data.tokens.access);
-      }
-      if (data?.tokens?.refresh) {
-        localStorage.setItem('refreshToken', data.tokens.refresh);
-      }
-      if (data?.user) {
-        localStorage.setItem('user', JSON.stringify(data.user));
+      if (!data) {
+        setError('Registration failed (invalid response). Please try again.');
+        setLoading(false);
+        return;
       }
 
+      setSuccessMessage(
+        data?.message ||
+          'Signup request submitted. Your account is pending Super Admin approval. You will receive an email once approved.'
+      );
       setLoading(false);
 
-      if (onSignupSuccess) {
-        onSignupSuccess();
-      }
+      setTimeout(() => {
+        if (onSignupSuccess) {
+          onSignupSuccess();
+        }
+      }, 800);
     } catch (err) {
       console.error('Signup error', err);
       setError('Something went wrong. Please check your connection and try again.');
@@ -207,6 +232,12 @@ const Signup = ({ onSignupSuccess }) => {
             {error && (
               <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                 {error}
+              </p>
+            )}
+
+            {successMessage && (
+              <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                {successMessage}
               </p>
             )}
 

@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 from django.contrib.auth.models import User
 
 from api.permissions import IsSuperAdmin
+from api.email_notifications import send_user_approved_email, send_user_disabled_email
 from .serializers import (
     CreateUserSerializer,
     UserWithRoleSerializer,
@@ -92,6 +93,10 @@ class DeactivateUserView(APIView):
         # Toggle active status
         user.is_active = not user.is_active
         user.save()
+
+        if user.is_active is False:
+            reason = request.data.get('reason') if isinstance(request.data, dict) else None
+            send_user_disabled_email(user, reason=reason)
         
         status_text = 'activated' if user.is_active else 'deactivated'
         
@@ -102,6 +107,40 @@ class DeactivateUserView(APIView):
                 'is_active': user.is_active,
             },
             'message': f'User {status_text} successfully'
+        }, status=status.HTTP_200_OK)
+
+
+class ApproveUserView(APIView):
+    permission_classes = [IsSuperAdmin]
+
+    def patch(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return Response({'error': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not hasattr(user, 'profile'):
+            return Response({'error': 'User profile not found'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if user.profile.role == 'super_admin':
+            return Response({'error': 'Super Admin does not require approval'}, status=status.HTTP_400_BAD_REQUEST)
+
+        user.is_active = True
+        user.save(update_fields=['is_active'])
+
+        user.profile.is_approved = True
+        user.profile.save(update_fields=['is_approved'])
+
+        send_user_approved_email(user)
+
+        return Response({
+            'user': {
+                'id': user.id,
+                'email': user.email,
+                'is_active': user.is_active,
+                'is_approved': user.profile.is_approved,
+            },
+            'message': 'User approved successfully'
         }, status=status.HTTP_200_OK)
 
 

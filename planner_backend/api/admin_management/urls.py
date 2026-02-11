@@ -8,6 +8,7 @@ from .views import (
     CreateUserView,
     ListAllUsersView,
     DeactivateUserView,
+    ApproveUserView,
     GetUserStatsView,
 )
 
@@ -18,6 +19,7 @@ urlpatterns = [
     # User Management
     path('users/', ListAllUsersView.as_view(), name='list-all-users'),
     path('users/<int:user_id>/toggle-status/', DeactivateUserView.as_view(), name='toggle-user-status'),
+    path('users/<int:user_id>/approve/', ApproveUserView.as_view(), name='approve-user'),
     
     # Statistics
     path('stats/', GetUserStatsView.as_view(), name='user-stats'),

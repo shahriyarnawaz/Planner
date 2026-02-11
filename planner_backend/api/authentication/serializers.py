@@ -57,7 +57,12 @@ class RegisterSerializer(serializers.ModelSerializer):
             last_name=validated_data['last_name'],
         )
         user.set_password(validated_data['password'])
+        user.is_active = False
         user.save()
+
+        if hasattr(user, 'profile'):
+            user.profile.is_approved = False
+            user.profile.save(update_fields=['is_approved'])
         
         return user
 
