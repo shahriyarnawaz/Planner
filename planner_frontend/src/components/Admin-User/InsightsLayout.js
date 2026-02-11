@@ -22,7 +22,7 @@ const completionBars = [
   { label: 'Average', value: 68 },
 ];
 
-const InsightsLayout = ({ onNavigate }) => {
+const InsightsLayout = ({ onNavigate, onLogout }) => {
   const completionRate = 75;
 
   let accumulated = 0;
@@ -52,7 +52,7 @@ const InsightsLayout = ({ onNavigate }) => {
     .join(' ');
 
   return (
-    <AdminLayout currentSection="insights" onNavigate={onNavigate}>
+    <AdminLayout currentSection="insights" onNavigate={onNavigate} onLogout={onLogout}>
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
         <div className="max-w-5xl w-full">
             {/* Header */}

@@ -9,7 +9,7 @@ const initialTemplates = [
   { id: 3, title: 'Evening Workout Plan', category: 'Health', items: 3, isDefault: false },
 ];
 
-const SystemAdminTemplatesLayout = ({ onNavigate }) => {
+const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
   const [templates, setTemplates] = React.useState(initialTemplates);
   const [categories, setCategories] = React.useState(initialCategories);
   const [newCategory, setNewCategory] = React.useState('');
@@ -27,7 +27,7 @@ const SystemAdminTemplatesLayout = ({ onNavigate }) => {
   };
 
   return (
-    <SystemAdminLayout currentSection="sys_templates" onNavigate={onNavigate}>
+    <SystemAdminLayout currentSection="sys_templates" onNavigate={onNavigate} onLogout={onLogout}>
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft">
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-heading">Template / Content Management</h1>

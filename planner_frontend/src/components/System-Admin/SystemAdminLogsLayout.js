@@ -15,7 +15,7 @@ const levelClass = (level) => {
   return 'bg-emerald-50 border-emerald-200 text-emerald-700';
 };
 
-const SystemAdminLogsLayout = ({ onNavigate }) => {
+const SystemAdminLogsLayout = ({ onNavigate, onLogout }) => {
   const [query, setQuery] = React.useState('');
   const [level, setLevel] = React.useState('ALL');
   const [selected, setSelected] = React.useState(null);
@@ -30,7 +30,7 @@ const SystemAdminLogsLayout = ({ onNavigate }) => {
   });
 
   return (
-    <SystemAdminLayout currentSection="sys_logs" onNavigate={onNavigate}>
+    <SystemAdminLayout currentSection="sys_logs" onNavigate={onNavigate} onLogout={onLogout}>
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft">
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-heading">System Logs & Audit</h1>

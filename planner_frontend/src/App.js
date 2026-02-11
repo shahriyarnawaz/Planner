@@ -104,57 +104,63 @@ function App() {
       {currentPage === 'dashboard' && (
         <AdminUserDashboardPage
           onNavigate={handleAdminNavigate}
+          onLogout={() => setCurrentPage('login')}
         />
       )}
 
       {currentPage === 'tasks' && (
         <AdminUserTasksPage
           onNavigate={handleAdminNavigate}
+          onLogout={() => setCurrentPage('login')}
         />
       )}
 
       {currentPage === 'calendar' && (
         <AdminUserCalendarPage
           onNavigate={handleAdminNavigate}
+          onLogout={() => setCurrentPage('login')}
         />
       )}
 
       {currentPage === 'templates' && (
         <AdminUserTemplatesPage
           onNavigate={handleAdminNavigate}
+          onLogout={() => setCurrentPage('login')}
         />
       )}
 
       {currentPage === 'insights' && (
         <AdminUserInsightsPage
           onNavigate={handleAdminNavigate}
+          onLogout={() => setCurrentPage('login')}
         />
       )}
 
       {currentPage === 'settings' && (
         <AdminUserSettingsPage
           onNavigate={handleAdminNavigate}
+          onLogout={() => setCurrentPage('login')}
         />
       )}
 
       {currentPage === 'sys_dashboard' && (
-        <SystemAdminDashboardPage onNavigate={handleAdminNavigate} />
+        <SystemAdminDashboardPage onNavigate={handleAdminNavigate} onLogout={() => setCurrentPage('login')} />
       )}
 
       {currentPage === 'sys_users' && (
-        <SystemAdminUsersPage onNavigate={handleAdminNavigate} />
+        <SystemAdminUsersPage onNavigate={handleAdminNavigate} onLogout={() => setCurrentPage('login')} />
       )}
 
       {currentPage === 'sys_templates' && (
-        <SystemAdminTemplatesPage onNavigate={handleAdminNavigate} />
+        <SystemAdminTemplatesPage onNavigate={handleAdminNavigate} onLogout={() => setCurrentPage('login')} />
       )}
 
       {currentPage === 'sys_ml' && (
-        <SystemAdminMLPage onNavigate={handleAdminNavigate} />
+        <SystemAdminMLPage onNavigate={handleAdminNavigate} onLogout={() => setCurrentPage('login')} />
       )}
 
       {currentPage === 'sys_logs' && (
-        <SystemAdminLogsPage onNavigate={handleAdminNavigate} />
+        <SystemAdminLogsPage onNavigate={handleAdminNavigate} onLogout={() => setCurrentPage('login')} />
       )}
     </div>
   );

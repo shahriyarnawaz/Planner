@@ -12,11 +12,11 @@ const bookmarkedTemplates = [
   { id: 12, name: 'Exam Study Plan', taskCount: 6 },
 ];
 
-const TemplatesLayout = ({ onNavigate }) => {
+const TemplatesLayout = ({ onNavigate, onLogout }) => {
   const [activeTab, setActiveTab] = React.useState('templates'); // 'templates' | 'bookmarks'
 
   return (
-    <AdminLayout currentSection="templates" onNavigate={onNavigate}>
+    <AdminLayout currentSection="templates" onNavigate={onNavigate} onLogout={onLogout}>
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
         <div className="max-w-5xl w-full">
             {/* Header */}

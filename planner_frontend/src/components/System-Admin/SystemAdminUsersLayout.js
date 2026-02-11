@@ -9,7 +9,7 @@ const badgeClass = (status) => {
   return 'bg-gray-50 border-gray-200 text-gray-700';
 };
 
-const SystemAdminUsersLayout = ({ onNavigate }) => {
+const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
   const [query, setQuery] = React.useState('');
   const [users, setUsers] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
@@ -251,7 +251,7 @@ const SystemAdminUsersLayout = ({ onNavigate }) => {
   };
 
   return (
-    <SystemAdminLayout currentSection="sys_users" onNavigate={onNavigate}>
+    <SystemAdminLayout currentSection="sys_users" onNavigate={onNavigate} onLogout={onLogout}>
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft">
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-heading">User Management</h1>

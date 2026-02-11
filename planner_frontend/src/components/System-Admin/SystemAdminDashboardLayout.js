@@ -22,9 +22,9 @@ const mlSummary = [
   { metric: 'Model Errors (24h)', value: '3', note: 'Runtime / inference errors' },
 ];
 
-const SystemAdminDashboardLayout = ({ onNavigate }) => {
+const SystemAdminDashboardLayout = ({ onNavigate, onLogout }) => {
   return (
-    <SystemAdminLayout currentSection="sys_dashboard" onNavigate={onNavigate}>
+    <SystemAdminLayout currentSection="sys_dashboard" onNavigate={onNavigate} onLogout={onLogout}>
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft">
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-heading">System Admin Dashboard</h1>

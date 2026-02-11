@@ -105,19 +105,19 @@ const Signup = ({ onSignupSuccess }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background-soft to-background flex items-center justify-center px-4 py-10">
-      <div className="max-w-5xl w-full grid md:grid-cols-2 gap-10 bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-background-dark">
+      <div className="max-w-5xl w-full grid md:grid-cols-2  bg-white/80 backdrop-blur-sm rounded-3xl shadow-xl border border-background-dark">
         {/* Left: Marketing / Info */}
-        <div className="hidden md:flex flex-col justify-center gap-6 px-10 py-10 bg-cream-light rounded-3xl md:rounded-r-none">
+        <div className="hidden md:flex flex-col justify-center gap-6 px-10 py-10 bg-primary rounded-3xl md:rounded-r-none">
           <p className="text-sm font-semibold tracking-wide text-accent-gold uppercase">
             Free account
           </p>
-          <h1 className="text-3xl lg:text-4xl font-bold text-heading leading-snug">
+          <h1 className="text-3xl lg:text-4xl text-[#fff] font-bold text-heading leading-snug">
             Create your Planner account
           </h1>
-          <p className="text-body text-base leading-relaxed">
+          <p className="text-[#fff] text-base leading-relaxed">
             Start organizing tasks, building routines, and staying productive with your personal planner dashboard.
           </p>
-          <ul className="space-y-3 text-body text-sm">
+          <ul className="space-y-3 text-[#fff] text-sm">
             <li className="flex items-center gap-2">
               <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-accent-gold text-[10px] text-white">
                 ✓

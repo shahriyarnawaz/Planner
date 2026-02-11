@@ -25,12 +25,12 @@ const statusClass = (status) => {
   return 'bg-gray-50 border-gray-200 text-gray-700';
 };
 
-const SystemAdminMLLayout = ({ onNavigate }) => {
+const SystemAdminMLLayout = ({ onNavigate, onLogout }) => {
   const [temperature, setTemperature] = React.useState(0.7);
   const [maxSuggestions, setMaxSuggestions] = React.useState(5);
 
   return (
-    <SystemAdminLayout currentSection="sys_ml" onNavigate={onNavigate}>
+    <SystemAdminLayout currentSection="sys_ml" onNavigate={onNavigate} onLogout={onLogout}>
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft">
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-heading">Monitor & Tune ML Models</h1>

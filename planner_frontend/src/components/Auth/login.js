@@ -177,12 +177,12 @@ const Login = ({ onLoginSuccess }) => {
         <h1 className="text-2xl font-bold text-heading mb-2">Welcome Back</h1>
         <p className="text-sm text-text-secondary mb-6">Login to continue to your planner.</p>
 
-        <div className="mb-6 rounded-xl border border-background-dark bg-background-soft p-4">
+        {/* <div className="mb-6 rounded-xl border border-background-dark bg-background-soft p-4">
           <div className="text-xs font-semibold text-text-secondary uppercase tracking-wide">Super Admin</div>
           <div className="mt-1 text-sm text-text-secondary">
             If you started the backend server, Super Admin credentials are printed in the terminal.
           </div>
-        </div>
+        </div> */}
 
         {showForgotPassword ? (
           <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">

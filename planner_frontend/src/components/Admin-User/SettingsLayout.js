@@ -1,7 +1,7 @@
 import React from 'react';
 import AdminLayout from './AdminLayout';
 
-const SettingsLayout = ({ onNavigate }) => {
+const SettingsLayout = ({ onNavigate, onLogout }) => {
   const [workHours, setWorkHours] = React.useState('09:00 – 22:00');
   const [focusBlock, setFocusBlock] = React.useState('45');
   const [defaultReminder, setDefaultReminder] = React.useState('15');
@@ -14,7 +14,7 @@ const SettingsLayout = ({ onNavigate }) => {
   };
 
   return (
-    <AdminLayout currentSection="settings" onNavigate={onNavigate}>
+    <AdminLayout currentSection="settings" onNavigate={onNavigate} onLogout={onLogout}>
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
         <div className="max-w-xl w-full">
             <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">

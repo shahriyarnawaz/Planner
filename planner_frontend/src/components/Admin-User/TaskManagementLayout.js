@@ -43,7 +43,7 @@ const FilterDropdown = ({ label, options, isOpen, onToggle, onSelect }) => {
   );
 };
 
-const TaskManagementLayout = ({ onNavigate }) => {
+const TaskManagementLayout = ({ onNavigate, onLogout }) => {
   const [showCreateForm, setShowCreateForm] = React.useState(false);
   const [openFilter, setOpenFilter] = React.useState(null);
   const [viewTask, setViewTask] = React.useState(null);
@@ -376,7 +376,7 @@ const TaskManagementLayout = ({ onNavigate }) => {
   };
 
   return (
-    <AdminLayout currentSection="tasks" onNavigate={onNavigate}>
+    <AdminLayout currentSection="tasks" onNavigate={onNavigate} onLogout={onLogout}>
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft flex flex-col">
         <div className="max-w-4xl w-full">
             {/* Header + Create button */}

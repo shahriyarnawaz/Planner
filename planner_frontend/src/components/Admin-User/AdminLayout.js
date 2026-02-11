@@ -2,7 +2,7 @@ import React from 'react';
 import AdminSidebar from './AdminSidebar';
 import AdminHeader from './AdminHeader';
 
-const AdminLayout = ({ currentSection, onNavigate, children }) => {
+const AdminLayout = ({ currentSection, onNavigate, onLogout, children }) => {
   return (
     <div className="min-h-screen flex bg-background">
       {/* Sidebar */}
@@ -10,7 +10,7 @@ const AdminLayout = ({ currentSection, onNavigate, children }) => {
 
       {/* Main content */}
       <main className="flex-1 flex flex-col">
-        <AdminHeader />
+        <AdminHeader onLogout={onLogout} />
         {children}
       </main>
     </div>

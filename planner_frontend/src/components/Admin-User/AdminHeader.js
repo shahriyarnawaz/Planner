@@ -1,7 +1,48 @@
 import React from 'react';
 
-const AdminHeader = () => {
+const AdminHeader = ({ onLogout }) => {
   const today = new Date().toLocaleDateString();
+  const [menuOpen, setMenuOpen] = React.useState(false);
+
+  const storedUser = React.useMemo(() => {
+    try {
+      const raw = localStorage.getItem('user');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }, []);
+
+  const fullName = React.useMemo(() => {
+    const first = storedUser?.first_name || storedUser?.firstName || '';
+    const last = storedUser?.last_name || storedUser?.lastName || '';
+    const combined = `${first} ${last}`.trim();
+    return combined || storedUser?.email || 'User';
+  }, [storedUser]);
+
+  const initials = React.useMemo(() => {
+    const first = storedUser?.first_name || storedUser?.firstName || '';
+    const last = storedUser?.last_name || storedUser?.lastName || '';
+    const a = (first || '').trim().slice(0, 1).toUpperCase();
+    const b = (last || '').trim().slice(0, 1).toUpperCase();
+    const result = `${a}${b}`.trim();
+    return result || (storedUser?.email || 'U').slice(0, 1).toUpperCase();
+  }, [storedUser]);
+
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
+      localStorage.removeItem('user');
+    } catch (e) {
+      // ignore
+    }
+
+    setMenuOpen(false);
+    if (onLogout) {
+      onLogout();
+    }
+  };
 
   return (
     <header className="h-16 border-b border-background-dark bg-white/80 backdrop-blur flex items-center justify-between px-6 lg:px-10">
@@ -50,14 +91,32 @@ const AdminHeader = () => {
           </span>
         </button>
 
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-9 rounded-full bg-olive-light text-white flex items-center justify-center text-sm font-semibold">
-            U
-          </div>
-          <div className="hidden sm:flex flex-col text-xs leading-tight">
-            <span className="font-medium text-text-primary">User Name</span>
-            <span className="text-text-muted">Personal Workspace</span>
-          </div>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-primary-light"
+          >
+            <div className="h-9 w-9 rounded-full bg-olive-light text-white flex items-center justify-center text-sm font-semibold">
+              {initials}
+            </div>
+            <div className="hidden sm:flex flex-col text-xs leading-tight text-left">
+              <span className="font-medium text-text-primary">{fullName}</span>
+              <span className="text-text-muted">Personal Workspace</span>
+            </div>
+          </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 mt-2 w-44 rounded-xl border border-background-dark bg-white shadow-lg overflow-hidden z-30">
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full text-left px-4 py-2.5 text-sm text-text-secondary hover:bg-background-soft hover:text-primary transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

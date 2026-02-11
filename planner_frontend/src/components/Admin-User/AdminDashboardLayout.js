@@ -1,15 +1,31 @@
 import React from 'react';
 import AdminLayout from './AdminLayout';
 
-const AdminDashboardLayout = ({ onNavigate }) => {
+const AdminDashboardLayout = ({ onNavigate, onLogout }) => {
+  const storedUser = React.useMemo(() => {
+    try {
+      const raw = localStorage.getItem('user');
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+      return null;
+    }
+  }, []);
+
+  const fullName = React.useMemo(() => {
+    const first = storedUser?.first_name || storedUser?.firstName || '';
+    const last = storedUser?.last_name || storedUser?.lastName || '';
+    const combined = `${first} ${last}`.trim();
+    return combined || storedUser?.email || 'User';
+  }, [storedUser]);
+
   return (
-    <AdminLayout currentSection="dashboard" onNavigate={onNavigate}>
+    <AdminLayout currentSection="dashboard" onNavigate={onNavigate} onLogout={onLogout}>
       {/* Dashboard Home Content */}
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft">
         {/* Greeting */}
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-heading flex items-center gap-2">
-            <span>Good Morning, Shahriyar</span>
+            <span>Good Morning, {fullName}</span>
             <span className="text-xl">👋</span>
           </h1>
         </div>
