@@ -1,9 +1,10 @@
 from rest_framework import serializers
 
-from api.models import TaskTemplate, TaskTemplateItem
+from api.models import Task, TaskTemplate, TaskTemplateItem, TemplateCategory
 
 
 class TaskTemplateItemSerializer(serializers.ModelSerializer):
+    task_date = serializers.DateField(required=False, allow_null=True)
     start_time = serializers.TimeField(required=False, input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
     end_time = serializers.TimeField(required=False, input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
 
@@ -15,6 +16,7 @@ class TaskTemplateItemSerializer(serializers.ModelSerializer):
             'description',
             'priority',
             'category',
+            'task_date',
             'start_time',
             'end_time',
             'duration',
@@ -24,7 +26,7 @@ class TaskTemplateItemSerializer(serializers.ModelSerializer):
 
 
 class TaskTemplateSerializer(serializers.ModelSerializer):
-    items = TaskTemplateItemSerializer(many=True)
+    items = TaskTemplateItemSerializer(many=True, required=False)
 
     class Meta:
         model = TaskTemplate
@@ -68,3 +70,17 @@ class TaskTemplateSerializer(serializers.ModelSerializer):
                 TaskTemplateItem.objects.bulk_create(items_to_create)
 
         return instance
+
+
+class TemplateCategorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TemplateCategory
+        fields = ['id', 'name', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate_name(self, value):
+        name = (value or '').strip()
+        allowed = [k for k, _ in Task.CATEGORY_CHOICES]
+        if name not in allowed:
+            raise serializers.ValidationError(f'Invalid category. Allowed: {", ".join(allowed)}.')
+        return name

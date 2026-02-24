@@ -278,6 +278,20 @@ class TaskReminder(models.Model):
         return f"{self.task_id} - {self.reminder_type} - {self.scheduled_for}"
 
 
+class TemplateCategory(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='template_categories')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'template_categories'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class TaskTemplate(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='task_templates')
     name = models.CharField(max_length=200)
@@ -301,6 +315,7 @@ class TaskTemplateItem(models.Model):
     description = models.TextField(blank=True, null=True)
     priority = models.CharField(max_length=10, choices=Task.PRIORITY_CHOICES, default='medium')
     category = models.CharField(max_length=20, choices=Task.CATEGORY_CHOICES, default='other')
+    task_date = models.DateField(blank=True, null=True)
     start_time = models.TimeField(blank=True, null=True)
     end_time = models.TimeField(blank=True, null=True)
     duration = models.IntegerField(blank=True, null=True)

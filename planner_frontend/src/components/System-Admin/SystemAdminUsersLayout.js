@@ -19,6 +19,7 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
   const [disableUserId, setDisableUserId] = React.useState(null);
   const [disableReasonOption, setDisableReasonOption] = React.useState('Policy violation');
   const [disableCustomReason, setDisableCustomReason] = React.useState('');
+  const [disableSubmitting, setDisableSubmitting] = React.useState(false);
 
   const getAccessToken = () => {
     try {
@@ -65,10 +66,11 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
     setDisableUserId(null);
     setDisableReasonOption('Policy violation');
     setDisableCustomReason('');
+    setDisableSubmitting(false);
   };
 
   const confirmDisable = async () => {
-    if (!disableUserId) return;
+    if (!disableUserId || disableSubmitting) return;
 
     const option = disableReasonOption;
     const custom = (disableCustomReason || '').trim();
@@ -80,12 +82,14 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
     }
 
     setError('');
+    setDisableSubmitting(true);
     updateUser(disableUserId, { _actionLoading: true });
 
     try {
       const data = await sendToggleRequest(disableUserId, { reason });
       if (!data) {
         updateUser(disableUserId, { _actionLoading: false });
+        setDisableSubmitting(false);
         return;
       }
 
@@ -102,6 +106,7 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
     } catch (e) {
       setError('Failed to disable user. Please try again.');
       updateUser(disableUserId, { _actionLoading: false });
+      setDisableSubmitting(false);
     }
   };
 
@@ -358,6 +363,7 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
                   <select
                     value={disableReasonOption}
                     onChange={(e) => setDisableReasonOption(e.target.value)}
+                    disabled={disableSubmitting}
                     className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                   >
                     <option value="Policy violation">Policy violation</option>
@@ -375,6 +381,7 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
                       value={disableCustomReason}
                       onChange={(e) => setDisableCustomReason(e.target.value)}
                       rows={3}
+                      disabled={disableSubmitting}
                       className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                       placeholder="Write the reason..."
                     />
@@ -386,6 +393,7 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
                 <button
                   type="button"
                   onClick={closeDisableModal}
+                  disabled={disableSubmitting}
                   className="rounded-xl border border-background-dark bg-white px-4 py-2 text-sm font-semibold text-text-secondary hover:border-primary hover:text-primary transition-colors"
                 >
                   Cancel
@@ -393,9 +401,12 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
                 <button
                   type="button"
                   onClick={confirmDisable}
-                  className="rounded-xl bg-red-600 hover:bg-red-700 text-white px-4 py-2 text-sm font-semibold shadow-sm transition-colors"
+                  disabled={disableSubmitting}
+                  className={`rounded-xl text-white px-4 py-2 text-sm font-semibold shadow-sm transition-colors ${
+                    disableSubmitting ? 'bg-red-400 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700'
+                  }`}
                 >
-                  Disable user
+                  {disableSubmitting ? 'Disabling...' : 'Disable user'}
                 </button>
               </div>
             </div>

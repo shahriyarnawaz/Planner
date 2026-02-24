@@ -7,6 +7,9 @@ from rest_framework import status, generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
+from django.db import transaction
+from django.db.utils import OperationalError
+import time
 
 from api.permissions import IsSuperAdmin
 from api.email_notifications import send_user_approved_email, send_user_disabled_email
@@ -89,15 +92,29 @@ class DeactivateUserView(APIView):
             return Response({
                 'error': 'Cannot deactivate Super Admin'
             }, status=status.HTTP_403_FORBIDDEN)
-        
-        # Toggle active status
-        user.is_active = not user.is_active
-        user.save()
 
-        if user.is_active is False:
-            reason = request.data.get('reason') if isinstance(request.data, dict) else None
+        reason = request.data.get('reason') if isinstance(request.data, dict) else None
+        target_is_active = False if reason else True
+        was_active = user.is_active
+
+        for attempt in range(3):
+            try:
+                with transaction.atomic():
+                    user.is_active = target_is_active
+                    user.save(update_fields=['is_active'])
+                    user.refresh_from_db(fields=['is_active'])
+                break
+            except OperationalError as e:
+                if 'database is locked' not in str(e).lower() or attempt == 2:
+                    return Response(
+                        {'error': 'Database is locked. Please try again.'},
+                        status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    )
+                time.sleep(0.2 * (attempt + 1))
+
+        if was_active and user.is_active is False:
             send_user_disabled_email(user, reason=reason)
-        
+
         status_text = 'activated' if user.is_active else 'deactivated'
         
         return Response({
