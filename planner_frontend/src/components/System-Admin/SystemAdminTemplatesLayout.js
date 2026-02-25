@@ -28,10 +28,12 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
 
   const [createCategoryModalOpen, setCreateCategoryModalOpen] = React.useState(false);
   const [createCategoryName, setCreateCategoryName] = React.useState('');
+  const [createCategoryError, setCreateCategoryError] = React.useState('');
 
   const [editCategoryModalOpen, setEditCategoryModalOpen] = React.useState(false);
   const [editCategoryId, setEditCategoryId] = React.useState(null);
   const [editCategoryName, setEditCategoryName] = React.useState('');
+  const [editCategoryError, setEditCategoryError] = React.useState('');
 
   const getAccessToken = () => {
     try {
@@ -137,13 +139,14 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
 
   const openCreateCategoryModal = () => {
     setCreateCategoryName('');
-    setError('');
+    setCreateCategoryError('');
     setCreateCategoryModalOpen(true);
   };
 
   const closeCreateCategoryModal = () => {
     setCreateCategoryModalOpen(false);
     setCreateCategoryName('');
+    setCreateCategoryError('');
   };
 
   const openCreateModal = () => {
@@ -482,17 +485,17 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
   const createCategory = async () => {
     const value = (createCategoryName || '').trim();
     if (!value) {
-      setError('Category name is required.');
+      setCreateCategoryError('Category name is required.');
       return;
     }
 
     if (!ALLOWED_TASK_CATEGORIES.includes(value)) {
-      setError(`Category must be one of: ${ALLOWED_TASK_CATEGORIES.join(', ')}.`);
+      setCreateCategoryError(`Category must be one of: ${ALLOWED_TASK_CATEGORIES.join(', ')}.`);
       return;
     }
 
     if (categories.some((c) => (c?.name || '').toLowerCase() === value.toLowerCase())) {
-      setError('Category already exists.');
+      setCreateCategoryError('Category already exists.');
       return;
     }
 
@@ -503,7 +506,7 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     }
 
     setLoading(true);
-    setError('');
+    setCreateCategoryError('');
     try {
       const response = await fetch(`${API_BASE_URL}/template-categories`, {
         method: 'POST',
@@ -516,7 +519,7 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
 
       const data = await response.json();
       if (!response.ok) {
-        setError(data?.detail || data?.error || 'Failed to create category.');
+        setCreateCategoryError(summarizeApiError(data) || 'Failed to create category.');
         setLoading(false);
         return;
       }
@@ -533,6 +536,7 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
   const openEditCategoryModal = (category) => {
     setEditCategoryId(category?.id || null);
     setEditCategoryName(category?.name || '');
+    setEditCategoryError('');
     setEditCategoryModalOpen(true);
   };
 
@@ -540,6 +544,7 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     setEditCategoryModalOpen(false);
     setEditCategoryId(null);
     setEditCategoryName('');
+    setEditCategoryError('');
   };
 
   const saveCategoryEdit = async () => {
@@ -547,12 +552,12 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     const name = (editCategoryName || '').trim();
     if (!id) return;
     if (!name) {
-      setError('Category name is required.');
+      setEditCategoryError('Category name is required.');
       return;
     }
 
     if (!ALLOWED_TASK_CATEGORIES.includes(name)) {
-      setError(`Category must be one of: ${ALLOWED_TASK_CATEGORIES.join(', ')}.`);
+      setEditCategoryError(`Category must be one of: ${ALLOWED_TASK_CATEGORIES.join(', ')}.`);
       return;
     }
 
@@ -563,7 +568,7 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     }
 
     setLoading(true);
-    setError('');
+    setEditCategoryError('');
     try {
       const response = await fetch(`${API_BASE_URL}/template-categories/${id}`, {
         method: 'PATCH',
@@ -576,7 +581,7 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
 
       const data = await response.json();
       if (!response.ok) {
-        setError(data?.detail || data?.error || 'Failed to update category.');
+        setEditCategoryError(summarizeApiError(data) || 'Failed to update category.');
         setLoading(false);
         return;
       }
@@ -961,6 +966,11 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
             </div>
 
             <div className="p-5 space-y-4">
+              {createCategoryError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                  {createCategoryError}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-heading mb-1">Name</label>
                 <input
@@ -1002,6 +1012,11 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
             </div>
 
             <div className="p-5 space-y-4">
+              {editCategoryError && (
+                <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                  {editCategoryError}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-heading mb-1">Name</label>
                 <input

@@ -7,6 +7,7 @@ const TemplatesLayout = ({ onNavigate, onLogout }) => {
   const [activeTab, setActiveTab] = React.useState('templates'); // 'templates' | 'bookmarks'
   const [globalTemplates, setGlobalTemplates] = React.useState([]);
   const [myTemplates, setMyTemplates] = React.useState([]);
+  const [templateCategories, setTemplateCategories] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
 
@@ -21,6 +22,41 @@ const TemplatesLayout = ({ onNavigate, onLogout }) => {
       return localStorage.getItem('accessToken');
     } catch (e) {
       return null;
+    }
+  };
+
+  const loadTemplateCategories = async () => {
+    const token = getAccessToken();
+    if (!token) {
+      setError('Missing access token. Please login again.');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/template-categories`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        return;
+      }
+
+      const results = Array.isArray(data) ? data : data?.results;
+      const mapped = (results || [])
+        .map((c) => ({
+          id: c?.id,
+          name: c?.name || '',
+        }))
+        .filter((c) => c.name);
+
+      setTemplateCategories(mapped);
+    } catch (e) {
+      return;
     }
   };
 
@@ -139,6 +175,7 @@ const TemplatesLayout = ({ onNavigate, onLogout }) => {
   React.useEffect(() => {
     loadGlobalTemplates();
     loadMyTemplates();
+    loadTemplateCategories();
   }, []);
 
   const openViewModal = (tpl) => {
@@ -646,12 +683,22 @@ const TemplatesLayout = ({ onNavigate, onLogout }) => {
                             className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                             disabled={submitting}
                           >
-                            <option value="study">Study</option>
-                            <option value="work">Work</option>
-                            <option value="health">Health</option>
-                            <option value="personal">Personal</option>
-                            <option value="shopping">Shopping</option>
-                            <option value="other">Other</option>
+                            {templateCategories.length > 0 ? (
+                              templateCategories.map((c) => (
+                                <option key={c.id} value={c.name}>
+                                  {c.name}
+                                </option>
+                              ))
+                            ) : (
+                              <>
+                                <option value="study">Study</option>
+                                <option value="work">Work</option>
+                                <option value="health">Health</option>
+                                <option value="personal">Personal</option>
+                                <option value="shopping">Shopping</option>
+                                <option value="other">Other</option>
+                              </>
+                            )}
                           </select>
                         </div>
 
