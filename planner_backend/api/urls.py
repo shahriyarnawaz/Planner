@@ -33,5 +33,8 @@ urlpatterns = [
     # ML Module (Smart Features)
     # Handles: recurring tasks, time predictions, task ordering, insights
     path('ml/', include('api.ml.urls')),
+
+    # Notifications Module
+    path('notifications/', include('api.notifications.urls')),
 ]
 

@@ -23,11 +23,6 @@ class TemplateListCreateView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
-    def get_permissions(self):
-        if self.request.method == 'POST':
-            return [permissions.IsAuthenticated(), IsSuperAdmin()]
-        return super().get_permissions()
-
 
 class TemplateSaveView(APIView):
     permission_classes = [permissions.IsAuthenticated]
@@ -71,14 +66,6 @@ class TemplateSaveView(APIView):
 
         serializer = TaskTemplateSerializer(new_template)
         return Response({'template': serializer.data}, status=status.HTTP_201_CREATED)
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-    def get_permissions(self):
-        if self.request.method == 'POST':
-            return [permissions.IsAuthenticated(), IsSuperAdmin()]
-        return super().get_permissions()
 
 
 class TemplateUpdateView(generics.RetrieveUpdateDestroyAPIView):

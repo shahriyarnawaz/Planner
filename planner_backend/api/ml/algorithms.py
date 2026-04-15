@@ -39,6 +39,13 @@ class TaskAnalyzer:
                 total_days = (timezone.now() - task_list[-1].created_at).days + 1
                 frequency = len(task_list) / max(total_days, 1)
                 
+                # Find most common start/end times
+                start_times = [t.start_time for t in task_list if t.start_time]
+                end_times = [t.end_time for t in task_list if t.end_time]
+                
+                common_start = Counter(start_times).most_common(1)[0][0] if start_times else None
+                common_end = Counter(end_times).most_common(1)[0][0] if end_times else None
+                
                 recurring.append({
                     'title': task_list[0].title,
                     'count': len(task_list),
@@ -46,6 +53,8 @@ class TaskAnalyzer:
                     'last_completed': task_list[0].created_at if task_list[0].completed else None,
                     'category': task_list[0].category,
                     'avg_duration': self.calculate_avg_duration(task_list),
+                    'start_time': common_start.strftime('%H:%M') if common_start else None,
+                    'end_time': common_end.strftime('%H:%M') if common_end else None,
                 })
         
         # Sort by frequency

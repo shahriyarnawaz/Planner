@@ -6,7 +6,13 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
   const [showTodayTasks, setShowTodayTasks] = React.useState(true);
   const [selectedDay, setSelectedDay] = React.useState(null); // date key like '2025-12-16'
 
-  // Sample tasks used for both calendar and popups, anchored around today
+  const [tasks, setTasks] = React.useState([]);
+  const [loadingTasks, setLoadingTasks] = React.useState(false);
+
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
+
+  /*
+  // Original static tasks:
   const [tasks] = React.useState(() => {
     const base = new Date();
     base.setHours(0, 0, 0, 0);
@@ -25,6 +31,8 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
       { id: 5, title: 'Read Book', date: makeKey(2), time: '20:00 – 21:00' },
     ];
   });
+  */
+
 
   const [todayKey] = React.useState(() => {
     const d = new Date();
@@ -49,6 +57,61 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
     start.setDate(today.getDate() - diff);
     return start;
   });
+
+  React.useEffect(() => {
+    const fetchTasks = async () => {
+      setLoadingTasks(true);
+      try {
+        const token = localStorage.getItem('accessToken');
+        if (!token) return;
+        
+        // Dynamically fetch around current month
+        const year = currentMonthDate.getFullYear();
+        const month = String(currentMonthDate.getMonth() + 1).padStart(2, '0');
+        const lastDay = new Date(year, currentMonthDate.getMonth() + 1, 0).getDate();
+        const dateFrom = `${year}-${month}-01`;
+        const dateTo = `${year}-${month}-${lastDay}`;
+        
+        const res = await fetch(`${API_BASE_URL}/tasks/search/?date_from=${dateFrom}&date_to=${dateTo}`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          let fetchedTasks = data.search_results?.tasks || data.results || (Array.isArray(data) ? data : []);
+          
+          const mappedTasks = fetchedTasks.map(t => {
+            let actualDate = t.task_date;
+            if (!actualDate) {
+              actualDate = t.deadline ? t.deadline.split('T')[0].split(' ')[0] : (t.created_at ? t.created_at.split('T')[0].split(' ')[0] : '');
+            }
+            
+            let timeStr = '';
+            if (t.start_time) {
+              timeStr = t.start_time.substring(0, 5) + (t.end_time ? ' – ' + t.end_time.substring(0, 5) : '');
+            } else if (t.deadline) {
+              const parts = t.deadline.split(' ');
+              if (parts.length > 1) timeStr = 'due ' + parts[1].substring(0, 5);
+            }
+
+            return {
+              id: t.id,
+              title: t.title,
+              date: actualDate,
+              time: timeStr
+            };
+          });
+          setTasks(mappedTasks);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoadingTasks(false);
+      }
+    };
+    fetchTasks();
+  }, [currentMonthDate, API_BASE_URL]);
+
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const monthLabel = `${monthNames[currentMonthDate.getMonth()]} ${currentMonthDate.getFullYear()}`;

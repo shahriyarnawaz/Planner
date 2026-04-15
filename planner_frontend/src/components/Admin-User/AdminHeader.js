@@ -3,6 +3,47 @@ import React from 'react';
 const AdminHeader = ({ onLogout }) => {
   const today = new Date().toLocaleDateString();
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [notifOpen, setNotifOpen] = React.useState(false);
+  const [notifications, setNotifications] = React.useState([]);
+
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
+
+  const fetchNotifications = React.useCallback(async () => {
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) return;
+      const res = await fetch(`${API_BASE_URL}/notifications/list/`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(Array.isArray(data) ? data : (data.results || []));
+      }
+    } catch (err) {
+      console.error('Fetch notifications error', err);
+    }
+  }, [API_BASE_URL]);
+
+  React.useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000); // Check every minute
+    return () => clearInterval(interval);
+  }, [fetchNotifications]);
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  const markAllRead = async () => {
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      await fetch(`${API_BASE_URL}/notifications/mark-all-read/`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      fetchNotifications();
+    } catch (err) {
+      console.error('Mark all read error', err);
+    }
+  };
 
   const storedUser = React.useMemo(() => {
     try {
@@ -79,17 +120,55 @@ const AdminHeader = ({ onLogout }) => {
           <span>{today}</span>
         </div>
 
-        <button
-          type="button"
-          className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-background-dark bg-white text-text-secondary hover:text-primary hover:border-primary transition-colors"
-        >
-          <span className="text-lg" aria-hidden="true">
-            🔔
-          </span>
-          <span className="absolute -top-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-accent-gold text-[9px] text-text-primary font-semibold">
-            3
-          </span>
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setNotifOpen(!notifOpen)}
+            className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-background-dark bg-white text-text-secondary hover:text-primary hover:border-primary transition-colors"
+          >
+            <span className="text-lg" aria-hidden="true">
+              🔔
+            </span>
+            {unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full bg-accent-gold text-[9px] text-text-primary font-semibold">
+                {unreadCount}
+              </span>
+            )}
+          </button>
+
+          {notifOpen && (
+            <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-background-dark bg-white shadow-xl overflow-hidden z-40 animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="p-4 border-b border-background-dark flex items-center justify-between bg-background-soft/50">
+                <h3 className="text-sm font-bold text-heading">Notifications</h3>
+                {unreadCount > 0 && (
+                  <button onClick={markAllRead} className="text-[10px] font-semibold text-primary hover:underline uppercase tracking-wider">
+                    Mark all read
+                  </button>
+                )}
+              </div>
+              <div className="max-h-80 overflow-y-auto">
+                {notifications.length === 0 ? (
+                  <div className="p-8 text-center text-muted">
+                    <p className="text-sm">No notifications yet</p>
+                  </div>
+                ) : (
+                  notifications.map((n) => (
+                    <div key={n.id} className={`p-4 border-b border-background-dark/50 hover:bg-background-soft transition-colors cursor-default ${!n.is_read ? 'bg-primary/5' : ''}`}>
+                      <div className="flex items-start gap-3">
+                        <div className={`mt-1 h-2 w-2 rounded-full shrink-0 ${!n.is_read ? 'bg-primary' : 'bg-transparent'}`} />
+                        <div className="flex-1">
+                          <p className={`text-xs font-bold ${!n.is_read ? 'text-heading' : 'text-text-primary'}`}>{n.title}</p>
+                          <p className="text-[11px] text-text-secondary mt-0.5 leading-relaxed">{n.message}</p>
+                          <p className="text-[9px] text-muted mt-1.5 uppercase tracking-tight">{new Date(n.created_at).toLocaleString()}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="relative">
           <button

@@ -7,7 +7,7 @@ from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
-from api.models import UserProfile
+from api.models import UserProfile, AuditLog
 
 
 class CreateUserSerializer(serializers.ModelSerializer):
@@ -77,4 +77,15 @@ class UserWithRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'email', 'first_name', 'last_name', 'role', 'is_active', 'is_approved', 'date_joined', 'created_at']
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    """Serializer for system audit logs"""
+    actor = serializers.EmailField(source='actor.email', read_only=True)
+    at = serializers.DateTimeField(source='timestamp', read_only=True)
+    
+    class Meta:
+        model = AuditLog
+        fields = ['id', 'at', 'level', 'actor', 'actor_email', 'event', 'message', 'path', 'ip_address']
+
 

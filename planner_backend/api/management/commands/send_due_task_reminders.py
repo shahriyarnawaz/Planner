@@ -10,7 +10,7 @@ from django.utils import timezone
 from zoneinfo import ZoneInfo
 
 from api.email_notifications import send_task_reminder_email
-from api.models import TaskReminder
+from api.models import TaskReminder, Notification
 
 
 class Command(BaseCommand):
@@ -104,6 +104,22 @@ class Command(BaseCommand):
                         sent += 1
                         sent_at_local = timezone.localtime(sent_at, pk_tz)
                         self.stdout.write(self.style.SUCCESS(f"  ✅ SENT (PK): {sent_at_local.strftime('%Y-%m-%d %I:%M %p')}"))
+
+                        # Create In-App Notification
+                        time_str = "starting soon"
+                        if reminder.reminder_type == '1_day':
+                            time_str = "starting tomorrow"
+                        elif reminder.reminder_type == '1_hour':
+                            time_str = "starting in 1 hour"
+                        elif reminder.reminder_type == '15_min':
+                            time_str = "starting in 15 minutes"
+
+                        Notification.objects.create(
+                            user=task.user,
+                            title=f"Task Reminder: {task.title}",
+                            message=f"Your task '{task.title}' is {time_str}.",
+                            notification_type='reminder'
+                        )
                     else:
                         failed += 1
                         self.stdout.write(self.style.ERROR("  ❌ FAILED: send_task_reminder_email returned None"))

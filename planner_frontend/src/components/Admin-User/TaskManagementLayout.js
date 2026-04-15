@@ -52,6 +52,8 @@ const TaskManagementLayout = ({ onNavigate, onLogout }) => {
   const [tasks, setTasks] = React.useState([]);
   const [tasksLoading, setTasksLoading] = React.useState(false);
   const [tasksError, setTasksError] = React.useState('');
+  const [recurringTasks, setRecurringTasks] = React.useState([]);
+  const [makingRecurring, setMakingRecurring] = React.useState(false);
   const [filterCategory, setFilterCategory] = React.useState('');
   const [filterPriority, setFilterPriority] = React.useState('');
   const [editTitle, setEditTitle] = React.useState('');
@@ -62,6 +64,7 @@ const TaskManagementLayout = ({ onNavigate, onLogout }) => {
   const [editCategory, setEditCategory] = React.useState('study');
   const [editDescription, setEditDescription] = React.useState('');
   const [editError, setEditError] = React.useState('');
+  const [refreshKey, setRefreshKey] = React.useState(0);
   const filtersRef = React.useRef(null);
 
   const parseTimeToMinutes = (value) => {
@@ -165,7 +168,63 @@ const TaskManagementLayout = ({ onNavigate, onLogout }) => {
     fetchTasks();
 
     return () => controller.abort();
-  }, [filterCategory, filterPriority]);
+  }, [filterCategory, filterPriority, refreshKey]);
+
+  const fetchRecurringTasks = async () => {
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      if (!accessToken) return;
+      const response = await fetch(`${API_BASE_URL}/ml/recurring-tasks/`, {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setRecurringTasks(data?.recurring_tasks || []);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchRecurringTasks();
+  }, []);
+
+  const handleMakeRecurring = async (task) => {
+    if (makingRecurring) return;
+    setMakingRecurring(true);
+    try {
+      const accessToken = localStorage.getItem('accessToken');
+      const response = await fetch(`${API_BASE_URL}/ml/make-recurring/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          title: task.title,
+          category: task.category,
+          avg_duration: task.avg_duration,
+          start_time: task.start_time,
+          end_time: task.end_time
+        })
+      });
+      if (response.ok) {
+         setRecurringTasks((prev) => prev.filter((t) => t.title !== task.title));
+         setRefreshKey(prev => prev + 1);
+         alert(`Successfully scheduled "${task.title}" for the next 7 days!`);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setMakingRecurring(false);
+    }
+  };
+
+  const handleIgnoreRecurring = (task) => {
+    setRecurringTasks((prev) => prev.filter((t) => t.title !== task.title));
+  };
 
   React.useEffect(() => {
     if (editTask) {
@@ -600,30 +659,36 @@ const TaskManagementLayout = ({ onNavigate, onLogout }) => {
             </div>
 
             {/* Recurring Task Detected card */}
-            <div className="mt-4 max-w-4xl rounded-2xl bg-white shadow-sm border border-background-dark p-4 md:p-5">
-              <div className="flex items-start gap-3">
-                <div className="text-xl mt-0.5">🔁</div>
-                <div className="flex-1 text-sm text-body">
-                  <h2 className="text-sm font-semibold text-heading mb-1">Recurring Task Detected</h2>
-                  <p>You studied "Math" at 8 PM for the last 5 days.</p>
-                  <p className="mt-1">Would you like to make this a daily task?</p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="inline-flex items-center justify-center rounded-xl bg-primary hover:bg-primary-dark px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200"
-                    >
-                      Make Recurring
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center justify-center rounded-xl border border-background-dark px-4 py-1.5 text-xs font-semibold text-heading bg-background-soft hover:bg-background-dark/40 transition-colors duration-150"
-                    >
-                      Ignore
-                    </button>
+            {recurringTasks.length > 0 && recurringTasks.slice(0, 1).map((task, idx) => (
+              <div key={idx} className="mt-4 max-w-4xl rounded-2xl bg-white shadow-sm border border-background-dark p-4 md:p-5">
+                <div className="flex items-start gap-3">
+                  <div className="text-xl mt-0.5">🔁</div>
+                  <div className="flex-1 text-sm text-body">
+                    <h2 className="text-sm font-semibold text-heading mb-1">Recurring Task Detected</h2>
+                    <p>You frequently complete "{task.title}" (avg ~{task.avg_duration || 0} mins). Detected ~{Math.round(task.frequency || 0)} times per week.</p>
+                    <p className="mt-1">Would you like to auto-schedule this for the next 7 days?</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleMakeRecurring(task)}
+                        disabled={makingRecurring}
+                        className="inline-flex items-center justify-center rounded-xl bg-primary hover:bg-primary-dark px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:shadow-md transition-all duration-200"
+                      >
+                        {makingRecurring ? 'Scheduling...' : 'Make Recurring'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleIgnoreRecurring(task)}
+                        disabled={makingRecurring}
+                        className="inline-flex items-center justify-center rounded-xl border border-background-dark px-4 py-1.5 text-xs font-semibold text-heading bg-background-soft hover:bg-background-dark/40 transition-colors duration-150"
+                      >
+                        Ignore
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            ))}
 
             {/* Create Task form (popup modal) */}
             {showCreateForm && (

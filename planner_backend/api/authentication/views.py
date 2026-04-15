@@ -8,6 +8,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
+from api.utils.logging import log_event
+
 
 from api.email_notifications import send_signup_approval_request_email, send_user_approved_email
 
@@ -106,6 +108,15 @@ class LoginView(APIView):
 
         refresh = RefreshToken.for_user(user)
 
+        log_event(
+            level='INFO',
+            event='USER_LOGIN',
+            message=f"User {user.email} logged in successfully",
+            request=request,
+            user=user
+        )
+
+
         return Response({
             'user': {
                 'id': user.id,
@@ -153,9 +164,18 @@ class LogoutView(APIView):
             token = RefreshToken(refresh_token)
             token.blacklist()
             
+            log_event(
+                level='INFO',
+                event='USER_LOGOUT',
+                message=f"User {request.user.email} logged out",
+                request=request,
+                user=request.user
+            )
+            
             return Response({
                 'message': 'Logout successful'
             }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response({
                 'error': 'Invalid token or token already blacklisted'

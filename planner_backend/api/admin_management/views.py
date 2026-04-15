@@ -11,11 +11,13 @@ from django.db import transaction
 from django.db.utils import OperationalError
 import time
 
+from api.models import AuditLog
 from api.permissions import IsSuperAdmin
 from api.email_notifications import send_user_approved_email, send_user_disabled_email
 from .serializers import (
     CreateUserSerializer,
     UserWithRoleSerializer,
+    AuditLogSerializer,
 )
 
 
@@ -187,4 +189,41 @@ class GetUserStatsView(APIView):
                 'inactive_users': inactive_users,
             }
         }, status=status.HTTP_200_OK)
+
+
+class AuditLogListView(generics.ListAPIView):
+    """
+    List and filter system audit logs
+    
+    GET /api/admin/logs/
+    
+    Query Params:
+        - level (INFO, WARN, ERROR)
+        - actor (email)
+        - search (generic text search)
+    """
+    permission_classes = [IsSuperAdmin]
+    serializer_class = AuditLogSerializer
+
+    def get_queryset(self):
+        queryset = AuditLog.objects.all().order_by('-timestamp')
+        
+        level = self.request.query_params.get('level')
+        if level and level != 'ALL':
+            queryset = queryset.filter(level=level)
+            
+        actor_email = self.request.query_params.get('actor')
+        if actor_email:
+            queryset = queryset.filter(actor_email__icontains=actor_email)
+            
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                generics.models.Q(event__icontains=search) | 
+                generics.models.Q(message__icontains=search) |
+                generics.models.Q(actor_email__icontains=search)
+            )
+            
+        return queryset
+
 

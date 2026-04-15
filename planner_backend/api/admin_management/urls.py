@@ -10,6 +10,7 @@ from .views import (
     DeactivateUserView,
     ApproveUserView,
     GetUserStatsView,
+    AuditLogListView,
 )
 
 urlpatterns = [
@@ -23,5 +24,8 @@ urlpatterns = [
     
     # Statistics
     path('stats/', GetUserStatsView.as_view(), name='user-stats'),
+    
+    # Logs and Audit
+    path('logs/', AuditLogListView.as_view(), name='admin-logs'),
 ]
 

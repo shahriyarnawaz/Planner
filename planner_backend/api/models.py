@@ -19,6 +19,14 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='user')
     is_approved = models.BooleanField(default=False)
+    
+    # User Preferences
+    work_start_time = models.TimeField(default='09:00')
+    work_end_time = models.TimeField(default='18:00')
+    focus_duration = models.IntegerField(default=45, help_text='Focus block duration in minutes')
+    reminder_offset = models.IntegerField(default=15, help_text='Default reminder time in minutes before task')
+    email_notifications = models.BooleanField(default=True)
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -329,3 +337,114 @@ class TaskTemplateItem(models.Model):
 
     def __str__(self):
         return f"{self.template_id} - {self.title}"
+
+
+class Notification(models.Model):
+    """
+    Model for in-app notifications
+    """
+    TYPE_CHOICES = [
+        ('reminder', 'Reminder'),
+        ('system', 'System'),
+        ('task', 'Task'),
+    ]
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
+    title = models.CharField(max_length=200)
+    message = models.TextField()
+    notification_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default='system')
+    is_read = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'notifications'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.user.email} - {self.title} - {self.is_read}"
+
+# ==========================================
+# SUPER ADMIN ML MONITORING MODELS
+# ==========================================
+
+class MLModelConfig(models.Model):
+    """Configuration and current status for an ML model"""
+    STATUS_CHOICES = [
+        ('healthy', 'Healthy'),
+        ('degraded', 'Degraded'),
+        ('offline', 'Offline'),
+    ]
+    
+    name = models.CharField(max_length=100, unique=True, help_text="Common name of the model")
+    version = models.CharField(max_length=50, default='v1.0')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='healthy')
+    last_trained = models.DateTimeField(null=True, blank=True)
+    temperature = models.FloatField(default=0.7)
+    max_suggestions = models.IntegerField(default=5)
+    
+    class Meta:
+        db_table = 'ml_model_configs'
+        verbose_name = 'ML Model Config'
+        verbose_name_plural = 'ML Model Configs'
+
+    def __str__(self):
+        return f"{self.name} ({self.version}) - {self.status}"
+
+
+class MLInferenceLog(models.Model):
+    """Log individual AI/ML inferences to track accuracy and patterns"""
+    model_config = models.ForeignKey(MLModelConfig, on_delete=models.CASCADE, related_name='inferences')
+    user = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='ml_inferences')
+    input_data = models.TextField(help_text="String representation of input context")
+    output_data = models.TextField(help_text="String representation of output prediction")
+    confidence_score = models.FloatField(default=0.0)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'ml_inference_logs'
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.model_config.name} inference at {self.timestamp}"
+
+
+class MLErrorLog(models.Model):
+    """Logs prediction failures or timeouts for the Super Admin to monitor"""
+    model_config = models.ForeignKey(MLModelConfig, on_delete=models.CASCADE, related_name='errors')
+    error_message = models.TextField()
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'ml_error_logs'
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"Error in {self.model_config.name} at {self.timestamp}"
+
+
+class AuditLog(models.Model):
+    """System-wide logs for activity tracking and automated error monitoring"""
+    LEVEL_CHOICES = [
+        ('INFO', 'Information'),
+        ('WARN', 'Warning'),
+        ('ERROR', 'Error'),
+    ]
+
+    timestamp = models.DateTimeField(auto_now_add=True)
+    level = models.CharField(max_length=10, choices=LEVEL_CHOICES, default='INFO')
+    actor = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='audit_logs')
+    actor_email = models.EmailField(null=True, blank=True, help_text="Captured at time of event")
+    event = models.CharField(max_length=50)
+    message = models.TextField()
+    path = models.CharField(max_length=255, null=True, blank=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    metadata = models.JSONField(null=True, blank=True, help_text="Extra context as JSON")
+
+    class Meta:
+        db_table = 'audit_logs'
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"[{self.level}] {self.event} at {self.timestamp}"
+
+

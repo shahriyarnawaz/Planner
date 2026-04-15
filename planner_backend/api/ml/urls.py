@@ -10,6 +10,13 @@ from .views import (
     BestTimeView,
     TaskOrderView,
     InsightsView,
+    MakeRecurringView,
+)
+
+from .admin_views import (
+    MLAdminDashboardView,
+    MLAdminConfigUpdateView,
+    MLAdminActionView
 )
 
 urlpatterns = [
@@ -18,8 +25,14 @@ urlpatterns = [
     
     # Individual ML features
     path('recurring-tasks/', RecurringTasksView.as_view(), name='recurring-tasks'),
+    path('make-recurring/', MakeRecurringView.as_view(), name='make-recurring'),
     path('best-time/', BestTimeView.as_view(), name='best-time'),
     path('task-order/', TaskOrderView.as_view(), name='task-order'),
     path('insights/', InsightsView.as_view(), name='insights'),
+    
+    # Admin Monitoring 
+    path('admin/status/', MLAdminDashboardView.as_view(), name='ml-admin-status'),
+    path('admin/config/', MLAdminConfigUpdateView.as_view(), name='ml-admin-config'),
+    path('admin/action/', MLAdminActionView.as_view(), name='ml-admin-action'),
 ]
 
