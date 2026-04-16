@@ -172,6 +172,7 @@ class Task(models.Model):
         """Override save to set deadline from slots and run validation"""
         from datetime import datetime
         from django.utils import timezone
+        from django.conf import settings
         from api.email_notifications import send_task_completion_email
         pk_tz = ZoneInfo('Asia/Karachi')
 
@@ -190,11 +191,35 @@ class Task(models.Model):
         self.clean()
         super().save(*args, **kwargs)
 
-        if (previous_completed is False and self.completed is True and not self.completion_email_sent and not previous_completion_email_sent):
+        if getattr(settings, 'DEBUG', False):
+            print(
+                "TASK_SAVE_DEBUG: "
+                f"id={self.id}, completed={self.completed}, "
+                f"previous_completed={previous_completed}, "
+                f"completion_email_sent={self.completion_email_sent}, "
+                f"previous_completion_email_sent={previous_completion_email_sent}, "
+                f"deadline={self.deadline}"
+            )
+
+        if self.completed and not self.completion_email_sent and not previous_completion_email_sent:
             try:
+                if getattr(settings, 'DEBUG', False):
+                    print(
+                        "TASK_COMPLETION_EMAIL_TRIGGER: "
+                        f"Task(id={self.id}, title='{self.title}')"
+                    )
                 send_task_completion_email(self)
             except Exception as e:
-                print(f"❌ Failed to send completion email for Task(id={self.id}): {e}")
+                print(f"Failed to send completion email for Task(id={self.id}): {e}")
+        elif getattr(settings, 'DEBUG', False):
+            print(
+                "TASK_COMPLETION_EMAIL_SKIP: "
+                f"Task(id={self.id}) reason="
+                f"previous_completed={previous_completed}, "
+                f"completed={self.completed}, "
+                f"completion_email_sent={self.completion_email_sent}, "
+                f"previous_completion_email_sent={previous_completion_email_sent}"
+            )
 
         if self.completed:
             TaskReminder.objects.filter(task=self, sent_at__isnull=True).delete()

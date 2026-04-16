@@ -284,11 +284,11 @@ def send_task_completion_email(task):
     updated_local = _to_pk_time(task.updated_at)
     
     if task.completed:
-        subject = f'✅ Task Completed: {task.title}'
+        subject = f'Task Completed: {task.title}'
         status_message = 'completed'
         status_color = '#4CAF50'
     else:
-        subject = f'⏰ Task Time Over: {task.title}'
+        subject = f'Task Time Over: {task.title}'
         status_message = 'time is over'
         status_color = '#FF9800'
     
@@ -355,7 +355,7 @@ def send_task_completion_email(task):
     
     try:
         print("\n" + "="*60)
-        print("📧 SENDING TASK COMPLETION EMAIL")
+        print("SENDING TASK COMPLETION EMAIL")
         print("="*60)
         print(f"To: {user.email}")
         print(f"Subject: {subject}")
@@ -380,7 +380,7 @@ def send_task_completion_email(task):
                 break
             except Exception as e:
                 last_error = e
-                print(f"❌ Email send attempt {attempt}/{max_attempts} failed: {e}")
+                print(f"Email send attempt {attempt}/{max_attempts} failed: {e}")
                 if attempt < max_attempts:
                     import time
                     time.sleep(2)
@@ -391,16 +391,16 @@ def send_task_completion_email(task):
         task.completion_email_sent = True
         task.save(update_fields=['completion_email_sent'])
         
-        print("✅ EMAIL SENT SUCCESSFULLY!")
-        print(f"✅ Email sent to: {user.email}")
-        print(f"✅ Task ID: {task.id}")
-        print(f"✅ Email marked as sent in database")
+        print("EMAIL SENT SUCCESSFULLY")
+        print(f"Email sent to: {user.email}")
+        print(f"Task ID: {task.id}")
+        print("Email marked as sent in database")
         print("="*60 + "\n")
         
         return True
     except Exception as e:
         print("\n" + "="*60)
-        print("❌ EMAIL SENDING FAILED")
+        print("EMAIL SENDING FAILED")
         print("="*60)
         print(f"To: {user.email}")
         print(f"Error: {str(e)}")

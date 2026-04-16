@@ -10,6 +10,7 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Sum, Count, Case, When, IntegerField
+from django.conf import settings
 
 from api.models import Task
 from api.permissions import IsOwnerOrSuperAdmin
@@ -74,11 +75,40 @@ class TaskCreateView(generics.CreateAPIView):
     serializer_class = TaskCreateSerializer
 
     def create(self, request, *args, **kwargs):
+        if getattr(settings, 'DEBUG', False):
+            print(
+                "TASK_CREATE_DEBUG: incoming payload "
+                f"title={request.data.get('title')}, "
+                f"task_date={request.data.get('task_date')}, "
+                f"start_time={request.data.get('start_time')}, "
+                f"end_time={request.data.get('end_time')}, "
+                f"priority={request.data.get('priority')}, "
+                f"category={request.data.get('category')}"
+            )
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
+
+        if getattr(settings, 'DEBUG', False):
+            vd = serializer.validated_data
+            print(
+                "TASK_CREATE_DEBUG: validated payload "
+                f"task_date={vd.get('task_date')}, "
+                f"start_time={vd.get('start_time')}, "
+                f"end_time={vd.get('end_time')}, "
+                f"duration={vd.get('duration')}"
+            )
         
         # Automatically assign the task to the logged-in user
         task = serializer.save(user=request.user)
+
+        if getattr(settings, 'DEBUG', False):
+            print(
+                "TASK_CREATE_DEBUG: saved task "
+                f"id={task.id}, task_date={task.task_date}, "
+                f"start_time={task.start_time}, end_time={task.end_time}, "
+                f"deadline={task.deadline}, duration={task.duration}"
+            )
         
         # Send email notification
         print("\n" + "="*60)

@@ -7,6 +7,7 @@ from django.db.models import Q
 from zoneinfo import ZoneInfo
 
 from api.models import Task
+from api.email_notifications import send_task_completion_email
 
 
 class Command(BaseCommand):
@@ -65,6 +66,11 @@ class Command(BaseCommand):
         self.stdout.write(
             f"[{now_local.strftime('%Y-%m-%d %H:%M:%S')}] Due tasks found: {len(due_tasks)}"
         )
+        self.stdout.write(
+            f"   Auto-complete check context: now_utc={now.strftime('%Y-%m-%d %H:%M:%S %z')}, "
+            f"now_local={now_local.strftime('%Y-%m-%d %H:%M:%S')}, "
+            f"today_local={today_local}, current_time_local={current_time_local}"
+        )
 
         if len(due_tasks) == 0:
             # Helpful debug: show the next upcoming task end time (local)
@@ -106,6 +112,15 @@ class Command(BaseCommand):
 
         updated = 0
         for task in due_tasks:
+            local_deadline = timezone.localtime(task.deadline, pk_tz) if task.deadline else None
+            self.stdout.write(
+                f"   DUE TASK CANDIDATE: id={task.id}, title='{task.title}', "
+                f"user='{task.user.email}', task_date={task.task_date}, "
+                f"start_time={task.start_time}, end_time={task.end_time}, "
+                f"deadline_local={(local_deadline.strftime('%Y-%m-%d %H:%M:%S') if local_deadline else 'None')}, "
+                f"completed={task.completed}, completion_email_sent={task.completion_email_sent}"
+            )
+
             if dry_run:
                 self.stdout.write(
                     self.style.WARNING(
@@ -117,12 +132,26 @@ class Command(BaseCommand):
 
             task.completed = True
             task.save(update_fields=['completed', 'updated_at'])
+            task.refresh_from_db(fields=['completed', 'completion_email_sent', 'updated_at'])
+
+            # Focused rule: when task time is over and task is auto-completed, send completion email.
+            if not task.completion_email_sent:
+                try:
+                    send_task_completion_email(task)
+                    task.refresh_from_db(fields=['completion_email_sent'])
+                except Exception as e:
+                    self.stdout.write(
+                        self.style.ERROR(
+                            f"AUTO-COMPLETE EMAIL ERROR: Task(id={task.id}, title='{task.title}') error={e}"
+                        )
+                    )
 
             updated += 1
-            local_deadline = timezone.localtime(task.deadline, pk_tz) if task.deadline else None
             self.stdout.write(
                 self.style.SUCCESS(
-                    f"AUTO-COMPLETED: Task(id={task.id}, title='{task.title}', user='{task.user.email}', end_at_local={(local_deadline.strftime('%Y-%m-%d %H:%M:%S') if local_deadline else str(task.end_time))})"
+                    f"AUTO-COMPLETED: Task(id={task.id}, title='{task.title}', user='{task.user.email}', "
+                    f"end_at_local={(local_deadline.strftime('%Y-%m-%d %H:%M:%S') if local_deadline else str(task.end_time))}, "
+                    f"completion_email_sent={task.completion_email_sent})"
                 )
             )
 
