@@ -1,35 +1,27 @@
 import React from 'react';
 import AdminLayout from '../../components/Admin-User/AdminLayout';
 
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
+
 const AdminUserCalendarPage = ({ onNavigate }) => {
-  const [viewMode, setViewMode] = React.useState('month'); // 'month' or 'week'
+  const [viewMode, setViewMode] = React.useState('month');
   const [showTodayTasks, setShowTodayTasks] = React.useState(true);
-  const [selectedDay, setSelectedDay] = React.useState(null); // date key like '2025-12-16'
+  const [selectedDay, setSelectedDay] = React.useState(null);
+  const [tasks, setTasks] = React.useState([]);
+  const [tasksLoading, setTasksLoading] = React.useState(false);
+  const [tasksError, setTasksError] = React.useState('');
 
-  // Sample tasks used for both calendar and popups, anchored around today
-  const [tasks] = React.useState(() => {
-    const base = new Date();
-    base.setHours(0, 0, 0, 0);
-
-    const makeKey = (offsetDays) => {
-      const d = new Date(base);
-      d.setDate(base.getDate() + offsetDays);
-      return d.toISOString().slice(0, 10);
-    };
-
-    return [
-      { id: 1, title: 'Study Math', date: makeKey(0), time: '09:00 – 09:30' },
-      { id: 2, title: 'Project Meeting', date: makeKey(0), time: '11:00 – 12:00' },
-      { id: 3, title: 'Workout', date: makeKey(0), time: '18:00 – 19:00' },
-      { id: 4, title: 'Design Review', date: makeKey(1), time: '15:00 – 16:00' },
-      { id: 5, title: 'Read Book', date: makeKey(2), time: '20:00 – 21:00' },
-    ];
-  });
+  const formatDateKeyLocal = React.useCallback((date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
 
   const [todayKey] = React.useState(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    return d.toISOString().slice(0, 10);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
 
   // Current month and week anchors for navigation
@@ -60,18 +52,87 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
     return `${day} ${months[month - 1]} ${year}`;
   };
 
+  const formatTimeTo12 = (value) => {
+    if (!value || typeof value !== 'string') return '';
+    const m24 = value.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?$/);
+    if (!m24) return value;
+    const hh = Number(m24[1]);
+    const mm = m24[2];
+    const ampm = hh >= 12 ? 'PM' : 'AM';
+    const h12 = hh % 12 === 0 ? 12 : hh % 12;
+    return `${String(h12).padStart(2, '0')}:${mm} ${ampm}`;
+  };
+
+  React.useEffect(() => {
+    const accessToken = localStorage.getItem('accessToken');
+    if (!accessToken) {
+      setTasks([]);
+      setTasksError('You must be logged in to view calendar tasks.');
+      return;
+    }
+
+    const controller = new AbortController();
+    const fetchTasks = async () => {
+      setTasksLoading(true);
+      setTasksError('');
+      try {
+        let url = `${API_BASE_URL}/tasks/`;
+        const allTasks = [];
+
+        while (url) {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal: controller.signal,
+          });
+          const data = await response.json();
+          if (!response.ok) {
+            throw new Error(data?.error || data?.detail || 'Failed to load calendar tasks.');
+          }
+
+          const page = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+          allTasks.push(...page);
+          url = typeof data?.next === 'string' && data.next ? data.next : null;
+        }
+
+        const mappedTasks = allTasks
+          .filter((task) => !!task.task_date)
+          .map((task) => ({
+            id: task.id,
+            title: task.title,
+            date: task.task_date,
+            time:
+              task.start_time && task.end_time
+                ? `${formatTimeTo12(task.start_time)} – ${formatTimeTo12(task.end_time)}`
+                : task.deadline || '--',
+            completed: !!task.completed,
+          }));
+
+        setTasks(mappedTasks);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        setTasks([]);
+        setTasksError(err.message || 'Something went wrong while loading calendar tasks.');
+      } finally {
+        setTasksLoading(false);
+      }
+    };
+
+    fetchTasks();
+    return () => controller.abort();
+  }, []);
+
   const weekRangeLabel = React.useMemo(() => {
     const start = currentWeekStart;
     const end = new Date(currentWeekStart);
     end.setDate(start.getDate() + 6);
 
-    const startKey = start.toISOString().slice(0, 10);
-    const endKey = end.toISOString().slice(0, 10);
+    const startKey = formatDateKeyLocal(start);
+    const endKey = formatDateKeyLocal(end);
     return `${formatHumanDate(startKey)} – ${formatHumanDate(endKey)}`;
-  }, [currentWeekStart, formatHumanDate]);
+  }, [currentWeekStart, formatDateKeyLocal]);
 
-  const getTasksForDate = (dateKey) =>
-    tasks.filter((task) => task.date === dateKey);
+  const getTasksForDate = (dateKey) => tasks.filter((task) => task.date === dateKey);
 
   const handlePrevMonth = () => {
     setCurrentMonthDate((prev) => {
@@ -266,6 +327,17 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
             </div>
           </div>
 
+          {tasksError && (
+            <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">
+              {tasksError}
+            </div>
+          )}
+          {tasksLoading && (
+            <div className="mb-3 rounded-lg border border-background-dark/60 bg-white px-3 py-2 text-xs text-body">
+              Loading calendar tasks...
+            </div>
+          )}
+
           {/* Calendar views */}
           {viewMode === 'month' ? (
             <div className="rounded-2xl bg-white border border-background-dark shadow-sm p-4 md:p-5">
@@ -318,6 +390,8 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
               <div className="grid grid-cols-7 gap-3 text-xs">
                 {weekDays.map((day) => {
                   const dayTasks = getTasksForDate(day.dateKey);
+                  const visibleTasks = dayTasks.slice(0, 3);
+                  const hiddenCount = Math.max(dayTasks.length - visibleTasks.length, 0);
                   const isToday = day.dateKey === todayKey;
                   return (
                     <button
@@ -334,7 +408,7 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
                       {dayTasks.length === 0 && (
                         <span className="text-[10px] text-muted mt-1">No tasks</span>
                       )}
-                      {dayTasks.map((task) => (
+                      {visibleTasks.map((task) => (
                         <span
                           key={task.id}
                           className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-white border border-background-dark/60 px-2 py-0.5 text-[10px] text-body"
@@ -343,6 +417,9 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
                           <span className="truncate">{task.title}</span>
                         </span>
                       ))}
+                      {hiddenCount > 0 && (
+                        <span className="text-[10px] text-muted mt-0.5">+{hiddenCount} more</span>
+                      )}
                     </button>
                   );
                 })}
@@ -382,7 +459,10 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
                   <div className="flex items-center gap-2">
                     <span className="text-lg">⏰</span>
                     <div>
-                      <p className="font-medium text-heading">{task.title}</p>
+                      <p className="font-medium text-heading">
+                        {task.title}
+                        {task.completed ? ' (Completed)' : ''}
+                      </p>
                       <p className="text-xs text-text-secondary">{task.time}</p>
                     </div>
                   </div>
@@ -438,7 +518,10 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
                   <div className="flex items-center gap-2">
                     <span className="text-lg">⏰</span>
                     <div>
-                      <p className="font-medium text-heading">{task.title}</p>
+                      <p className="font-medium text-heading">
+                        {task.title}
+                        {task.completed ? ' (Completed)' : ''}
+                      </p>
                       <p className="text-xs text-text-secondary">{task.time}</p>
                     </div>
                   </div>
