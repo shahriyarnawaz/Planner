@@ -1,5 +1,6 @@
 import React from 'react';
 import SystemAdminLayout from './SystemAdminLayout';
+import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
@@ -72,9 +73,9 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
         },
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
       if (!response.ok) {
-        setError(data?.detail || data?.error || 'Failed to load templates.');
+        setError(extractApiErrorMessage(response, data, 'Failed to load templates.'));
         setLoading(false);
         return;
       }
@@ -117,9 +118,9 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
         },
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
       if (!response.ok) {
-        setError(data?.detail || data?.error || 'Failed to load categories.');
+        setError(extractApiErrorMessage(response, data, 'Failed to load categories.'));
         setLoading(false);
         return;
       }
@@ -333,13 +334,8 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
       });
 
       if (!response.ok) {
-        let data = null;
-        try {
-          data = await response.json();
-        } catch (e) {
-          data = null;
-        }
-        setError(data?.detail || data?.error || 'Failed to delete template.');
+        const { data } = await parseApiResponse(response);
+        setError(extractApiErrorMessage(response, data, 'Failed to delete template.'));
         setLoading(false);
         return;
       }
@@ -402,9 +398,9 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
         }),
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
       if (!response.ok) {
-        setError(summarizeApiError(data) || 'Failed to update template.');
+        setError(extractApiErrorMessage(response, data, 'Failed to update template.'));
         setLoading(false);
         return;
       }
@@ -466,9 +462,9 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
         }),
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
       if (!response.ok) {
-        setError(summarizeApiError(data) || 'Failed to create template.');
+        setError(extractApiErrorMessage(response, data, 'Failed to create template.'));
         setLoading(false);
         return;
       }
@@ -517,9 +513,9 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
         body: JSON.stringify({ name: value }),
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
       if (!response.ok) {
-        setCreateCategoryError(summarizeApiError(data) || 'Failed to create category.');
+        setCreateCategoryError(extractApiErrorMessage(response, data, 'Failed to create category.'));
         setLoading(false);
         return;
       }
@@ -579,9 +575,9 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
         body: JSON.stringify({ name }),
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
       if (!response.ok) {
-        setEditCategoryError(summarizeApiError(data) || 'Failed to update category.');
+        setEditCategoryError(extractApiErrorMessage(response, data, 'Failed to update category.'));
         setLoading(false);
         return;
       }
@@ -620,13 +616,8 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
       });
 
       if (!response.ok) {
-        let data = null;
-        try {
-          data = await response.json();
-        } catch (e) {
-          data = null;
-        }
-        setError(data?.detail || data?.error || 'Failed to delete category.');
+        const { data } = await parseApiResponse(response);
+        setError(extractApiErrorMessage(response, data, 'Failed to delete category.'));
         setLoading(false);
         return;
       }

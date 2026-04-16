@@ -1,5 +1,6 @@
 import React from 'react';
 import AdminLayout from '../../components/Admin-User/AdminLayout';
+import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
@@ -85,9 +86,9 @@ const AdminUserCalendarPage = ({ onNavigate }) => {
             headers: { Authorization: `Bearer ${accessToken}` },
             signal: controller.signal,
           });
-          const data = await response.json();
+          const { data } = await parseApiResponse(response);
           if (!response.ok) {
-            throw new Error(data?.error || data?.detail || 'Failed to load calendar tasks.');
+            throw new Error(extractApiErrorMessage(response, data, 'Failed to load calendar tasks.'));
           }
 
           const page = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];

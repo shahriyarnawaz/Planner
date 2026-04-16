@@ -1,4 +1,5 @@
 import React from 'react';
+import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
@@ -31,19 +32,10 @@ const Login = ({ onLoginSuccess }) => {
         }),
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
 
       if (!response.ok) {
-        const backendError = data?.error || data?.detail;
-        if (backendError) {
-          setError(backendError);
-        } else if (typeof data === 'object') {
-          const firstKey = Object.keys(data)[0];
-          const firstMessage = Array.isArray(data[firstKey]) ? data[firstKey][0] : data[firstKey];
-          setError(firstMessage || 'Login failed. Please try again.');
-        } else {
-          setError('Login failed. Please try again.');
-        }
+        setError(extractApiErrorMessage(response, data, 'Login failed. Please try again.'));
         setLoading(false);
         return;
       }
@@ -77,7 +69,7 @@ const Login = ({ onLoginSuccess }) => {
           });
 
           if (!profileResponse.ok) return;
-          const profileData = await profileResponse.json();
+          const { data: profileData } = await parseApiResponse(profileResponse);
 
           const mergedUser = {
             ...(parsedUser || {}),
@@ -142,20 +134,10 @@ const Login = ({ onLoginSuccess }) => {
         }),
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
 
       if (!response.ok) {
-        const backendError = data?.error || data?.detail || data?.non_field_errors?.[0];
-        if (backendError) {
-          setError(backendError);
-        } else if (typeof data === 'object') {
-          const keys = Object.keys(data || {});
-          const firstKey = keys[0];
-          const firstMessage = firstKey ? (Array.isArray(data[firstKey]) ? data[firstKey][0] : data[firstKey]) : null;
-          setError(firstMessage || 'Password reset failed. Please try again.');
-        } else {
-          setError('Password reset failed. Please try again.');
-        }
+        setError(extractApiErrorMessage(response, data, 'Password reset failed. Please try again.'));
         setLoading(false);
         return;
       }

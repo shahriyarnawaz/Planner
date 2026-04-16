@@ -1,6 +1,7 @@
 import React from 'react';
 import AdminLayout from './AdminLayout';
 import CreateTaskForm from './CreateTaskForm';
+import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
@@ -140,11 +141,10 @@ const TaskManagementLayout = ({ onNavigate, onLogout }) => {
           signal: controller.signal,
         });
 
-        const data = await response.json();
+        const { data } = await parseApiResponse(response);
 
         if (!response.ok) {
-          const backendError = data?.error || data?.detail;
-          setTasksError(backendError || 'Failed to load tasks.');
+          setTasksError(extractApiErrorMessage(response, data, 'Failed to load tasks.'));
           setTasks([]);
           setTasksLoading(false);
           return;
@@ -282,16 +282,10 @@ const TaskManagementLayout = ({ onNavigate, onLogout }) => {
         },
       });
 
-      let data = null;
-      try {
-        data = await response.json();
-      } catch (e) {
-        data = null;
-      }
+      const { data } = await parseApiResponse(response);
 
       if (!response.ok) {
-        const backendError = data?.error || data?.detail;
-        setTasksError(backendError || 'Failed to delete task.');
+        setTasksError(extractApiErrorMessage(response, data, 'Failed to delete task.'));
         return;
       }
 
@@ -343,24 +337,10 @@ const TaskManagementLayout = ({ onNavigate, onLogout }) => {
         }),
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
 
       if (!response.ok) {
-        const backendError = data?.error || data?.detail || data?.non_field_errors?.[0];
-        if (backendError) {
-          setEditError(backendError);
-        } else if (typeof data === 'object') {
-          const keys = Object.keys(data || {});
-          const firstKey = keys[0];
-          const firstMessage = firstKey
-            ? Array.isArray(data[firstKey])
-              ? data[firstKey][0]
-              : data[firstKey]
-            : null;
-          setEditError(firstMessage || 'Failed to update task.');
-        } else {
-          setEditError('Failed to update task.');
-        }
+        setEditError(extractApiErrorMessage(response, data, 'Failed to update task.'));
         return;
       }
 

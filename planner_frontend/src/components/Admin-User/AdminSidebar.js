@@ -6,7 +6,7 @@ const navItems = [
   { id: 'calendar', label: 'Calendar' },
   { id: 'templates', label: 'Templates' },
   { id: 'insights', label: 'Insights' },
-  { id: 'settings', label: 'Settings' },
+  { id: 'settings', label: 'Profile & Preferences' },
 ];
 
 const AdminSidebar = ({ currentSection = 'dashboard', onNavigate }) => {
@@ -35,7 +35,7 @@ const AdminSidebar = ({ currentSection = 'dashboard', onNavigate }) => {
             >
               <span>{item.label}</span>
               {item.id === 'dashboard' && (
-                <span className="text-xs">🔔</span>
+                <span className="text-xs"></span>
               )}
             </button>
           );

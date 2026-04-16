@@ -1,5 +1,6 @@
 import React from 'react';
 import SystemAdminLayout from './SystemAdminLayout';
+import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
@@ -45,9 +46,9 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
       body: payload ? JSON.stringify(payload) : undefined,
     });
 
-    const data = await response.json();
+    const { data } = await parseApiResponse(response);
     if (!response.ok) {
-      setError(data?.detail || data?.error || 'Failed to update user status.');
+      setError(extractApiErrorMessage(response, data, 'Failed to update user status.'));
       return null;
     }
 
@@ -152,9 +153,9 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
         },
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
       if (!response.ok) {
-        setError(data?.detail || data?.error || 'Failed to load users.');
+        setError(extractApiErrorMessage(response, data, 'Failed to load users.'));
         setLoading(false);
         return;
       }
@@ -204,9 +205,9 @@ const SystemAdminUsersLayout = ({ onNavigate, onLogout }) => {
           Authorization: `Bearer ${token}`,
         },
       });
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
       if (!response.ok) {
-        setError(data?.detail || data?.error || 'Failed to approve user.');
+        setError(extractApiErrorMessage(response, data, 'Failed to approve user.'));
         updateUser(id, { _actionLoading: false });
         return;
       }

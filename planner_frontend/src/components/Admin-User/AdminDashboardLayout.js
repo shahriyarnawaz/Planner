@@ -1,5 +1,6 @@
 import React from 'react';
 import AdminLayout from './AdminLayout';
+import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
@@ -95,9 +96,9 @@ const AdminDashboardLayout = ({ onNavigate, onLogout }) => {
             signal: controller.signal,
           });
 
-          const data = await response.json();
+          const { data } = await parseApiResponse(response);
           if (!response.ok) {
-            throw new Error(data?.error || data?.detail || 'Failed to load tasks.');
+            throw new Error(extractApiErrorMessage(response, data, 'Failed to load tasks.'));
           }
 
           const results = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
@@ -149,9 +150,9 @@ const AdminDashboardLayout = ({ onNavigate, onLogout }) => {
           signal: controller.signal,
         });
 
-        const data = await response.json();
+        const { data } = await parseApiResponse(response);
         if (!response.ok) {
-          throw new Error(data?.error || data?.detail || 'Failed to load smart suggestions.');
+          throw new Error(extractApiErrorMessage(response, data, 'Failed to load smart suggestions.'));
         }
 
         const recommendations = data?.recommendations;

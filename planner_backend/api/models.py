@@ -19,6 +19,12 @@ class UserProfile(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='user')
     is_approved = models.BooleanField(default=False)
+    work_start_time = models.TimeField(default='09:00')
+    work_end_time = models.TimeField(default='22:00')
+    focus_block_minutes = models.PositiveIntegerField(default=45)
+    preferred_reminder_minutes = models.PositiveIntegerField(default=15)
+    email_notifications_enabled = models.BooleanField(default=True)
+    push_notifications_enabled = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

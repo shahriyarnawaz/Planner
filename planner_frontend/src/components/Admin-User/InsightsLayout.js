@@ -1,46 +1,172 @@
 import React from 'react';
 import AdminLayout from './AdminLayout';
+import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
 
-const categoryData = [
-  { name: 'Study', percent: 40 },
-  { name: 'Work', percent: 30 },
-  { name: 'Health', percent: 20 },
-  { name: 'Personal', percent: 10 },
-];
-
-const weeklyTrends = [
-  { day: 'Mon', value: 70 },
-  { day: 'Tue', value: 90 },
-  { day: 'Wed', value: 70 },
-  { day: 'Thu', value: 85 },
-  { day: 'Fri', value: 60 },
-];
-
-const completionBars = [
-  { label: 'This Week', value: 75 },
-  { label: 'Last Week', value: 62 },
-  { label: 'Average', value: 68 },
-];
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
+const CATEGORY_COLOR_MAP = {
+  study: '#4b6b3c',
+  work: '#8a5b3e',
+  health: '#3b82f6',
+  personal: '#d97757',
+  shopping: '#a855f7',
+  other: '#6b7280',
+};
 
 const InsightsLayout = ({ onNavigate, onLogout }) => {
-  const completionRate = 75;
+  const [categoryData, setCategoryData] = React.useState([]);
+  const [weeklyTrends, setWeeklyTrends] = React.useState([]);
+  const [completionBars, setCompletionBars] = React.useState([
+    { label: 'This Week', value: 0 },
+    { label: 'Last Week', value: 0 },
+    { label: 'Average', value: 0 },
+  ]);
+  const [completionRate, setCompletionRate] = React.useState(0);
+  const [loading, setLoading] = React.useState(false);
+
+  const toDateKey = React.useCallback((date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  React.useEffect(() => {
+    const accessToken = localStorage.getItem('accessToken');
+    if (!accessToken) {
+      setCategoryData([]);
+      setWeeklyTrends([]);
+      setCompletionRate(0);
+      setCompletionBars([
+        { label: 'This Week', value: 0 },
+        { label: 'Last Week', value: 0 },
+        { label: 'Average', value: 0 },
+      ]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const fetchInsights = async () => {
+      setLoading(true);
+      try {
+        const now = new Date();
+        now.setHours(0, 0, 0, 0);
+        const thisWeekStart = new Date(now);
+        thisWeekStart.setDate(now.getDate() - 6);
+        const lastWeekEnd = new Date(thisWeekStart);
+        lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
+        const lastWeekStart = new Date(lastWeekEnd);
+        lastWeekStart.setDate(lastWeekEnd.getDate() - 6);
+
+        let url = `${API_BASE_URL}/tasks/`;
+        const allTasks = [];
+
+        while (url) {
+          const response = await fetch(url, {
+            method: 'GET',
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal: controller.signal,
+          });
+          const { data } = await parseApiResponse(response);
+          if (!response.ok) {
+            throw new Error(extractApiErrorMessage(response, data, 'Failed to load tasks for insights.'));
+          }
+          const results = Array.isArray(data?.results) ? data.results : Array.isArray(data) ? data : [];
+          allTasks.push(...results);
+          url = typeof data?.next === 'string' && data.next ? data.next : null;
+        }
+
+        const parseTaskDate = (task) => {
+          if (!task?.task_date) return null;
+          const [yy, mm, dd] = String(task.task_date).split('-').map(Number);
+          if (!yy || !mm || !dd) return null;
+          const d = new Date(yy, mm - 1, dd);
+          d.setHours(0, 0, 0, 0);
+          return d;
+        };
+
+        const inRange = (date, from, to) => date && date >= from && date <= to;
+
+        const thisWeekTasks = allTasks.filter((t) => inRange(parseTaskDate(t), thisWeekStart, now));
+        const lastWeekTasks = allTasks.filter((t) => inRange(parseTaskDate(t), lastWeekStart, lastWeekEnd));
+
+        const categoryMinutes = {};
+        let totalMinutes = 0;
+        thisWeekTasks.forEach((task) => {
+          const key = task.category || 'other';
+          const mins = Number(task.duration || 0);
+          categoryMinutes[key] = (categoryMinutes[key] || 0) + mins;
+          totalMinutes += mins;
+        });
+        const mappedCategories = Object.entries(categoryMinutes)
+          .map(([key, mins]) => ({
+            name: key.charAt(0).toUpperCase() + key.slice(1),
+            percent: totalMinutes > 0 ? Math.round((mins / totalMinutes) * 100) : 0,
+            color: CATEGORY_COLOR_MAP[key] || '#6b7280',
+          }))
+          .sort((a, b) => b.percent - a.percent);
+        setCategoryData(mappedCategories);
+
+        const dayLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dailyTrend = [];
+        for (let i = 6; i >= 0; i -= 1) {
+          const day = new Date(now);
+          day.setDate(now.getDate() - i);
+          const nextDay = new Date(day);
+          nextDay.setDate(day.getDate() + 1);
+          const tasksForDay = allTasks.filter((t) => {
+            const d = parseTaskDate(t);
+            return d && d >= day && d < nextDay;
+          });
+          const total = tasksForDay.length;
+          const completed = tasksForDay.filter((t) => !!t.completed).length;
+          const rate = total > 0 ? Math.round((completed / total) * 100) : 0;
+          dailyTrend.push({ day: dayLabels[day.getDay()], value: rate });
+        }
+        setWeeklyTrends(dailyTrend);
+
+        const thisWeekRate =
+          thisWeekTasks.length > 0
+            ? Number(((thisWeekTasks.filter((t) => !!t.completed).length / thisWeekTasks.length) * 100).toFixed(2))
+            : 0;
+        const lastWeekRate =
+          lastWeekTasks.length > 0
+            ? Number(((lastWeekTasks.filter((t) => !!t.completed).length / lastWeekTasks.length) * 100).toFixed(2))
+            : 0;
+        const avgRate = Number(((thisWeekRate + lastWeekRate) / 2).toFixed(2));
+        setCompletionRate(thisWeekRate);
+        setCompletionBars([
+          { label: 'This Week', value: thisWeekRate },
+          { label: 'Last Week', value: lastWeekRate },
+          { label: 'Average', value: avgRate },
+        ]);
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        setCategoryData([]);
+        setWeeklyTrends([]);
+        setCompletionRate(0);
+        setCompletionBars([
+          { label: 'This Week', value: 0 },
+          { label: 'Last Week', value: 0 },
+          { label: 'Average', value: 0 },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchInsights();
+    return () => controller.abort();
+  }, []);
 
   let accumulated = 0;
   const pieSegments = categoryData.map((cat) => {
     const start = accumulated;
     const end = accumulated + cat.percent;
     accumulated = end;
-    const color =
-      cat.name === 'Study'
-        ? '#4b6b3c'
-        : cat.name === 'Work'
-        ? '#8a5b3e'
-        : cat.name === 'Health'
-        ? '#3b82f6'
-        : '#d97757';
+    const color = cat.color || '#6b7280';
     return `${color} ${start}% ${end}%`;
   });
-  const pieGradient = `conic-gradient(${pieSegments.join(',')})`;
+  const pieGradient = pieSegments.length > 0 ? `conic-gradient(${pieSegments.join(',')})` : 'conic-gradient(#d1d5db 0% 100%)';
 
   const linePoints = weeklyTrends
     .map((point, index) => {
@@ -50,6 +176,13 @@ const InsightsLayout = ({ onNavigate, onLogout }) => {
       return `${x},${y}`;
     })
     .join(' ');
+
+  const getCompletionBarColorClass = (value) => {
+    if (value >= 75) return 'bg-primary';
+    if (value >= 40) return 'bg-warning';
+    if (value > 0) return 'bg-danger-light';
+    return 'bg-transparent';
+  };
 
   return (
     <AdminLayout currentSection="insights" onNavigate={onNavigate} onLogout={onLogout}>
@@ -65,6 +198,11 @@ const InsightsLayout = ({ onNavigate, onLogout }) => {
               </div>
             </div>
 
+            {loading && (
+              <div className="mb-4 rounded-xl border border-background-dark/60 bg-white px-3 py-2 text-xs text-body">
+                Loading insights...
+              </div>
+            )}
             <div className="grid gap-6 md:grid-cols-2 mb-6">
               {/* Time Spent Per Category */}
               <div className="rounded-2xl bg-white border border-background-dark shadow-sm p-5 flex flex-col">
@@ -93,16 +231,7 @@ const InsightsLayout = ({ onNavigate, onLogout }) => {
                         <div className="flex items-center gap-2">
                           <span
                             className="inline-block h-2.5 w-2.5 rounded-full"
-                            style={{
-                              backgroundColor:
-                                cat.name === 'Study'
-                                  ? '#4b6b3c'
-                                  : cat.name === 'Work'
-                                  ? '#8a5b3e'
-                                  : cat.name === 'Health'
-                                  ? '#3b82f6'
-                                  : '#d97757',
-                            }}
+                            style={{ backgroundColor: cat.color || '#6b7280' }}
                           />
                           <span className="text-body">{cat.name}</span>
                         </div>
@@ -115,6 +244,9 @@ const InsightsLayout = ({ onNavigate, onLogout }) => {
                         <span className="text-text-secondary text-xs">{cat.percent}%</span>
                       </div>
                     ))}
+                    {!loading && categoryData.length === 0 && (
+                      <p className="text-xs text-muted">No category history yet.</p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -152,6 +284,9 @@ const InsightsLayout = ({ onNavigate, onLogout }) => {
                       <span key={point.day}>{point.day}</span>
                     ))}
                   </div>
+                  {!loading && weeklyTrends.length === 0 && (
+                    <p className="mt-2 text-xs text-muted">No weekly trend data yet.</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -163,10 +298,10 @@ const InsightsLayout = ({ onNavigate, onLogout }) => {
               <div className="mt-1 flex items-end gap-4 h-32">
                 {completionBars.map((bar) => (
                   <div key={bar.label} className="flex-1 flex flex-col items-center justify-end">
-                    <div className="relative w-8 md:w-10 h-24 rounded-xl bg-background-dark/20 overflow-hidden flex items-end">
+                    <div className="relative w-8 md:w-10 h-24 rounded-xl bg-background-dark/70 overflow-hidden flex items-end">
                       <div
-                        className="w-full rounded-xl bg-primary"
-                        style={{ height: `${bar.value}%` }}
+                        className={`w-full rounded-xl ${getCompletionBarColorClass(bar.value)}`}
+                        style={{ height: `${Math.max(0, Math.min(100, Number(bar.value) || 0))}%` }}
                       />
                     </div>
                     <span className="mt-1 text-[10px] text-text-secondary text-center">{bar.label}</span>

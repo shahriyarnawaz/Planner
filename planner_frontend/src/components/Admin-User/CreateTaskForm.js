@@ -1,4 +1,5 @@
 import React from 'react';
+import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
@@ -128,20 +129,10 @@ const CreateTaskForm = ({ onTaskCreated, onClose }) => {
         }),
       });
 
-      const data = await response.json();
+      const { data } = await parseApiResponse(response);
 
       if (!response.ok) {
-        const backendError = data?.error || data?.detail || data?.non_field_errors?.[0];
-        if (backendError) {
-          setError(backendError);
-        } else if (typeof data === 'object') {
-          const keys = Object.keys(data || {});
-          const firstKey = keys[0];
-          const firstMessage = firstKey ? (Array.isArray(data[firstKey]) ? data[firstKey][0] : data[firstKey]) : null;
-          setError(firstMessage || 'Failed to create task. Please try again.');
-        } else {
-          setError('Failed to create task. Please try again.');
-        }
+        setError(extractApiErrorMessage(response, data, 'Failed to create task. Please try again.'));
         setLoading(false);
         return;
       }
