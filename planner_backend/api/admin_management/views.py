@@ -9,10 +9,14 @@ from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from django.db import transaction
 from django.db.utils import OperationalError
+from django.utils import timezone
+from datetime import timedelta, datetime, time as time_obj
 import time
+from django.db.models import Count
 
 from api.permissions import IsSuperAdmin
 from api.email_notifications import send_user_approved_email, send_user_disabled_email
+from api.models import Task, TaskReminder
 from .serializers import (
     CreateUserSerializer,
     UserWithRoleSerializer,
@@ -177,6 +181,32 @@ class GetUserStatsView(APIView):
         regular_users = User.objects.filter(profile__role='user').count()
         active_users = User.objects.filter(is_active=True).count()
         inactive_users = User.objects.filter(is_active=False).count()
+        last_24h = timezone.now() - timedelta(hours=24)
+
+        tasks_created_24h = Task.objects.filter(created_at__gte=last_24h).count()
+        tasks_completed_24h = Task.objects.filter(
+            completed=True,
+            updated_at__gte=last_24h,
+        ).count()
+
+        creation_emails_sent_24h = Task.objects.filter(
+            creation_email_sent=True,
+            created_at__gte=last_24h,
+        ).count()
+        completion_emails_sent_24h = Task.objects.filter(
+            completion_email_sent=True,
+            updated_at__gte=last_24h,
+        ).count()
+        reminder_emails_sent_24h = TaskReminder.objects.filter(
+            sent_at__isnull=False,
+            sent_at__gte=last_24h,
+        ).count()
+
+        total_task_emails_sent_24h = (
+            creation_emails_sent_24h
+            + completion_emails_sent_24h
+            + reminder_emails_sent_24h
+        )
         
         return Response({
             'statistics': {
@@ -185,6 +215,70 @@ class GetUserStatsView(APIView):
                 'regular_users': regular_users,
                 'active_users': active_users,
                 'inactive_users': inactive_users,
+                'tasks_created_24h': tasks_created_24h,
+                'tasks_completed_24h': tasks_completed_24h,
+                'email_notifications_24h': {
+                    'creation': creation_emails_sent_24h,
+                    'completion': completion_emails_sent_24h,
+                    'reminder': reminder_emails_sent_24h,
+                    'total': total_task_emails_sent_24h,
+                },
+            }
+        }, status=status.HTTP_200_OK)
+
+
+class GetSystemUsageView(APIView):
+    """
+    Get 7-day system usage metrics for Super Admin dashboard.
+
+    GET /api/admin/system-usage/
+    """
+    permission_classes = [IsSuperAdmin]
+
+    def get(self, request):
+        today = timezone.localdate()
+        daily_usage = []
+        period_start_date = today - timedelta(days=6)
+        period_start_dt = timezone.make_aware(datetime.combine(period_start_date, time_obj.min))
+
+        for days_ago in range(6, -1, -1):
+            day = today - timedelta(days=days_ago)
+            start_dt = timezone.make_aware(datetime.combine(day, time_obj.min))
+            end_dt = start_dt + timedelta(days=1)
+
+            tasks_created = Task.objects.filter(
+                created_at__gte=start_dt,
+                created_at__lt=end_dt,
+            ).count()
+            tasks_completed = Task.objects.filter(
+                completed=True,
+                updated_at__gte=start_dt,
+                updated_at__lt=end_dt,
+            ).count()
+            active_users = Task.objects.filter(
+                created_at__gte=start_dt,
+                created_at__lt=end_dt,
+            ).values('user_id').distinct().count()
+
+            daily_usage.append({
+                'date': day.isoformat(),
+                'active_users': active_users,
+                'tasks_created': tasks_created,
+                'tasks_completed': tasks_completed,
+            })
+
+        top_common_tasks = list(
+            Task.objects.filter(created_at__gte=period_start_dt)
+            .values('title', 'category')
+            .annotate(count=Count('id'))
+            .order_by('-count', 'title')[:5]
+        )
+
+        return Response({
+            'usage': {
+                'period_days': 7,
+                'daily': daily_usage,
+                'common_tasks': top_common_tasks,
             }
         }, status=status.HTTP_200_OK)
 

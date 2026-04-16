@@ -10,6 +10,7 @@ from .views import (
     DeactivateUserView,
     ApproveUserView,
     GetUserStatsView,
+    GetSystemUsageView,
 )
 
 urlpatterns = [
@@ -23,5 +24,6 @@ urlpatterns = [
     
     # Statistics
     path('stats/', GetUserStatsView.as_view(), name='user-stats'),
+    path('system-usage/', GetSystemUsageView.as_view(), name='system-usage'),
 ]
 

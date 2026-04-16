@@ -1,18 +1,14 @@
 import React from 'react';
 import SystemAdminLayout from './SystemAdminLayout';
+import { parseApiResponse } from '../../utils/safeApiResponse';
 
-const stats = [
-  { label: 'Active Users (24h)', value: '128', trend: '+6.4%' },
-  { label: 'Tasks Created (24h)', value: '1,342', trend: '+3.1%' },
-  { label: 'Tasks Completed (24h)', value: '1,019', trend: '+4.9%' },
-  { label: 'Email Delivery', value: '99.2%', trend: '-0.3%' },
-];
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
-const commonTasks = [
-  { title: 'Study Session', count: 312, category: 'Study' },
-  { title: 'Workout', count: 214, category: 'Health' },
-  { title: 'Team Meeting', count: 187, category: 'Work' },
-  { title: 'Assignment Submission', count: 161, category: 'Study' },
+const defaultStats = [
+  { label: 'All Users', value: '--', trend: 'Live' },
+  { label: 'Tasks Created (24h)', value: '--', trend: 'Live' },
+  { label: 'Tasks Completed (24h)', value: '--', trend: 'Live' },
+  { label: 'Email Delivery', value: '--', trend: 'Live' },
 ];
 
 const mlSummary = [
@@ -23,6 +19,137 @@ const mlSummary = [
 ];
 
 const SystemAdminDashboardLayout = ({ onNavigate, onLogout }) => {
+  const [stats, setStats] = React.useState(defaultStats);
+  const [usageDaily, setUsageDaily] = React.useState([]);
+  const [commonTasks, setCommonTasks] = React.useState([]);
+
+  React.useEffect(() => {
+    const accessToken = localStorage.getItem('accessToken');
+    if (!accessToken) return;
+
+    const controller = new AbortController();
+
+    const loadDashboardStats = async () => {
+      try {
+        const statsResponse = await fetch(`${API_BASE_URL}/admin/stats/`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          signal: controller.signal,
+        });
+
+        const { data } = await parseApiResponse(statsResponse);
+        if (!statsResponse.ok) return;
+
+        const apiStats = data?.statistics || {};
+        const allUsersCount = Number(apiStats?.total_users || 0);
+        const tasksCreated24h = Number(apiStats?.tasks_created_24h || 0);
+        const tasksCompleted24h = Number(apiStats?.tasks_completed_24h || 0);
+        const emailNotifications24h = Number(apiStats?.email_notifications_24h?.total || 0);
+
+        setStats((prev) => {
+          const next = [...prev];
+          next[0] = {
+            ...next[0],
+            label: 'All Users',
+            value: String(allUsersCount),
+            trend: 'Live',
+          };
+          next[1] = {
+            ...next[1],
+            value: String(tasksCreated24h),
+            trend: 'Live',
+          };
+          next[2] = {
+            ...next[2],
+            value: String(tasksCompleted24h),
+            trend: 'Live',
+          };
+          next[3] = {
+            ...next[3],
+            value: String(emailNotifications24h),
+            label: 'Emails Sent (24h)',
+            trend: 'Live',
+          };
+          return next;
+        });
+
+        const usageResponse = await fetch(`${API_BASE_URL}/admin/system-usage/`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          signal: controller.signal,
+        });
+        const { data: usageData } = await parseApiResponse(usageResponse);
+        if (usageResponse.ok) {
+          const usagePayload = usageData?.usage || {};
+          setUsageDaily(Array.isArray(usagePayload?.daily) ? usagePayload.daily : []);
+          setCommonTasks(Array.isArray(usagePayload?.common_tasks) ? usagePayload.common_tasks : []);
+        }
+      } catch (error) {
+        if (error.name === 'AbortError') return;
+      }
+    };
+
+    loadDashboardStats();
+    return () => controller.abort();
+  }, []);
+
+  const usageChartData = React.useMemo(() => {
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return usageDaily.map((item) => {
+      const d = item?.date ? new Date(item.date) : null;
+      const day = d && !Number.isNaN(d.getTime()) ? dayNames[d.getDay()] : '--';
+      return {
+        day,
+        activeUsers: Number(item?.active_users || 0),
+        tasksCreated: Number(item?.tasks_created || 0),
+        tasksCompleted: Number(item?.tasks_completed || 0),
+      };
+    });
+  }, [usageDaily]);
+
+  const activeUsersPoints = React.useMemo(() => {
+    if (usageChartData.length === 0) return '';
+    const maxValue = Math.max(1, ...usageChartData.map((p) => p.activeUsers));
+    return usageChartData
+      .map((point, index) => {
+        const total = usageChartData.length > 1 ? usageChartData.length - 1 : 1;
+        const x = (index / total) * 100;
+        const y = 40 - (point.activeUsers / maxValue) * 30 - 2;
+        return `${x},${y}`;
+      })
+      .join(' ');
+  }, [usageChartData]);
+
+  const throughputPointsCreated = React.useMemo(() => {
+    if (usageChartData.length === 0) return '';
+    const maxValue = Math.max(1, ...usageChartData.map((p) => Math.max(p.tasksCreated, p.tasksCompleted)));
+    return usageChartData
+      .map((point, index) => {
+        const total = usageChartData.length > 1 ? usageChartData.length - 1 : 1;
+        const x = (index / total) * 100;
+        const y = 40 - (point.tasksCreated / maxValue) * 30 - 2;
+        return `${x},${y}`;
+      })
+      .join(' ');
+  }, [usageChartData]);
+
+  const throughputPointsCompleted = React.useMemo(() => {
+    if (usageChartData.length === 0) return '';
+    const maxValue = Math.max(1, ...usageChartData.map((p) => Math.max(p.tasksCreated, p.tasksCompleted)));
+    return usageChartData
+      .map((point, index) => {
+        const total = usageChartData.length > 1 ? usageChartData.length - 1 : 1;
+        const x = (index / total) * 100;
+        const y = 40 - (point.tasksCompleted / maxValue) * 30 - 2;
+        return `${x},${y}`;
+      })
+      .join(' ');
+  }, [usageChartData]);
+
   return (
     <SystemAdminLayout currentSection="sys_dashboard" onNavigate={onNavigate} onLogout={onLogout}>
       <section className="flex-1 px-6 lg:px-10 py-6 bg-background-soft">
@@ -55,14 +182,69 @@ const SystemAdminDashboardLayout = ({ onNavigate, onLogout }) => {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="rounded-xl bg-background-soft border border-background-dark/60 p-4">
                 <div className="text-xs text-text-muted">Active users trend</div>
-                <div className="mt-3 h-28 rounded-lg bg-white border border-background-dark/60 flex items-center justify-center text-xs text-text-muted">
-                  Chart placeholder
+                <div className="mt-3 h-28 rounded-lg bg-white border border-background-dark/60 p-2">
+                  {usageChartData.length > 0 ? (
+                    <>
+                      <svg viewBox="0 0 100 40" className="w-full h-[75%] text-primary" preserveAspectRatio="none">
+                        <polyline
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          points={activeUsersPoints}
+                        />
+                      </svg>
+                      <div className="mt-1 flex justify-between text-[10px] text-text-secondary">
+                        {usageChartData.map((point) => (
+                          <span key={`active-${point.day}`}>{point.day}</span>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-xs text-text-muted">No usage data yet.</div>
+                  )}
                 </div>
               </div>
               <div className="rounded-xl bg-background-soft border border-background-dark/60 p-4">
                 <div className="text-xs text-text-muted">Task throughput</div>
-                <div className="mt-3 h-28 rounded-lg bg-white border border-background-dark/60 flex items-center justify-center text-xs text-text-muted">
-                  Chart placeholder
+                <div className="mt-3 h-28 rounded-lg bg-white border border-background-dark/60 p-2">
+                  {usageChartData.length > 0 ? (
+                    <>
+                      <svg viewBox="0 0 100 40" className="w-full h-[75%]" preserveAspectRatio="none">
+                        <polyline
+                          fill="none"
+                          stroke="#4b6b3c"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          points={throughputPointsCreated}
+                        />
+                        <polyline
+                          fill="none"
+                          stroke="#d97757"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          points={throughputPointsCompleted}
+                        />
+                      </svg>
+                      <div className="mt-1 flex justify-between text-[10px] text-text-secondary">
+                        {usageChartData.map((point) => (
+                          <span key={`throughput-${point.day}`}>{point.day}</span>
+                        ))}
+                      </div>
+                      <div className="mt-1 flex items-center gap-3 text-[10px] text-text-secondary">
+                        <span className="inline-flex items-center gap-1">
+                          <span className="inline-block h-2 w-2 rounded-full bg-olive" />
+                          Created
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <span className="inline-block h-2 w-2 rounded-full bg-danger-light" />
+                          Completed
+                        </span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-xs text-text-muted">No throughput data yet.</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -82,15 +264,20 @@ const SystemAdminDashboardLayout = ({ onNavigate, onLogout }) => {
             <div className="border-t border-background-dark/60 mt-3 mb-3" />
 
             <div className="space-y-3 text-sm">
-              {commonTasks.map((t) => (
-                <div key={t.title} className="flex items-center justify-between">
+              {commonTasks.map((t, idx) => (
+                <div key={`${t.title}-${t.category}-${idx}`} className="flex items-center justify-between">
                   <div>
                     <div className="font-medium text-heading">{t.title}</div>
-                    <div className="text-xs text-text-muted">{t.category}</div>
+                    <div className="text-xs text-text-muted">
+                      {String(t.category || '').charAt(0).toUpperCase() + String(t.category || '').slice(1)}
+                    </div>
                   </div>
                   <div className="text-xs font-semibold text-text-secondary">{t.count}</div>
                 </div>
               ))}
+              {commonTasks.length === 0 && (
+                <p className="text-xs text-text-muted">No common tasks data yet.</p>
+              )}
             </div>
           </div>
         </div>
