@@ -3,6 +3,7 @@ import AdminLayout from './AdminLayout';
 import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
+const ML_MAX_SUGGESTIONS_KEY = 'mlMaxSuggestions';
 
 const AdminDashboardLayout = ({ onNavigate, onLogout }) => {
   const storedUser = React.useMemo(() => {
@@ -27,6 +28,28 @@ const AdminDashboardLayout = ({ onNavigate, onLogout }) => {
   const [smartSuggestions, setSmartSuggestions] = React.useState([]);
   const [suggestionsLoading, setSuggestionsLoading] = React.useState(false);
   const [suggestionsError, setSuggestionsError] = React.useState('');
+  const [maxSuggestions, setMaxSuggestions] = React.useState(3);
+
+  React.useEffect(() => {
+    const readMaxSuggestions = () => {
+      try {
+        const raw = localStorage.getItem(ML_MAX_SUGGESTIONS_KEY);
+        if (!raw) {
+          setMaxSuggestions(3);
+          return;
+        }
+        const parsed = Number(raw);
+        const clamped = Number.isFinite(parsed) ? Math.max(1, Math.min(20, Math.round(parsed))) : 3;
+        setMaxSuggestions(clamped);
+      } catch (e) {
+        setMaxSuggestions(3);
+      }
+    };
+
+    readMaxSuggestions();
+    window.addEventListener('storage', readMaxSuggestions);
+    return () => window.removeEventListener('storage', readMaxSuggestions);
+  }, []);
 
   const formatDateKeyLocal = React.useCallback((date) => {
     const year = date.getFullYear();
@@ -203,7 +226,7 @@ const AdminDashboardLayout = ({ onNavigate, onLogout }) => {
           });
         }
 
-        setSmartSuggestions(nextSuggestions.slice(0, 3));
+        setSmartSuggestions(nextSuggestions.slice(0, maxSuggestions));
       } catch (err) {
         if (err.name === 'AbortError') return;
         console.error('Dashboard smart suggestion fetch error', err);
@@ -216,7 +239,7 @@ const AdminDashboardLayout = ({ onNavigate, onLogout }) => {
 
     fetchSuggestions();
     return () => controller.abort();
-  }, []);
+  }, [maxSuggestions]);
 
   const completedCount = todayTasks.filter((task) => !!task.completed).length;
   const progressPercent = todayTasks.length > 0 ? Math.round((completedCount / todayTasks.length) * 100) : 0;
@@ -291,6 +314,7 @@ const AdminDashboardLayout = ({ onNavigate, onLogout }) => {
             <h2 className="text-sm font-semibold text-heading mb-2">Smart Suggestions</h2>
             <p className="text-xs text-muted mb-3">
               ML-based suggestions tailored from your recent study and work patterns.
+              {` Showing up to ${maxSuggestions} suggestion${maxSuggestions === 1 ? '' : 's'} (admin controlled).`}
             </p>
             <div className="space-y-3 text-sm text-body">
               {suggestionsLoading && <p className="text-xs text-body">Loading smart suggestions...</p>}
