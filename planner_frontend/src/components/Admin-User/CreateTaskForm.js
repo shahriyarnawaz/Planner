@@ -1,5 +1,6 @@
 import React from 'react';
 import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
+import { DEFAULT_REMINDER_MINUTES, REMINDER_MINUTE_OPTIONS } from '../../utils/reminderOptions';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
@@ -10,10 +11,53 @@ const CreateTaskForm = ({ onTaskCreated, onClose }) => {
   const [endTime, setEndTime] = React.useState('09:30');
   const [category, setCategory] = React.useState('study');
   const [priority, setPriority] = React.useState('high');
-  const [reminder, setReminder] = React.useState('15');
+  const [reminder, setReminder] = React.useState(String(DEFAULT_REMINDER_MINUTES));
   const [description, setDescription] = React.useState('');
+  const [categories, setCategories] = React.useState([]);
+  const [categoriesLoading, setCategoriesLoading] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState('');
+
+  React.useEffect(() => {
+    const accessToken = localStorage.getItem('accessToken');
+    if (!accessToken) return;
+
+    const controller = new AbortController();
+
+    const loadCategories = async () => {
+      setCategoriesLoading(true);
+      try {
+        const response = await fetch(`${API_BASE_URL}/template-categories`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          signal: controller.signal,
+        });
+        const { data } = await parseApiResponse(response);
+        if (!response.ok) return;
+
+        const results = Array.isArray(data) ? data : Array.isArray(data?.results) ? data.results : [];
+        const nextCategories = results
+          .map((item) => String(item?.name || '').trim().toLowerCase())
+          .filter((name) => !!name);
+
+        setCategories(nextCategories);
+        if (nextCategories.length > 0) {
+          setCategory(nextCategories[0]);
+        } else {
+          setCategory('');
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+      } finally {
+        setCategoriesLoading(false);
+      }
+    };
+
+    loadCategories();
+    return () => controller.abort();
+  }, []);
 
   const parseTimeToMinutes = (value) => {
     if (!value || typeof value !== 'string') return null;
@@ -59,6 +103,11 @@ const CreateTaskForm = ({ onTaskCreated, onClose }) => {
 
     if (!title.trim()) {
       setError('Title is required.');
+      return;
+    }
+
+    if (!category) {
+      setError('No category is available. Please ask admin to add categories first.');
       return;
     }
 
@@ -126,6 +175,7 @@ const CreateTaskForm = ({ onTaskCreated, onClose }) => {
           task_date: date,
           start_time: startTime,
           end_time: endTime,
+          reminder_minutes: reminder === '' ? null : Number(reminder),
         }),
       });
 
@@ -146,9 +196,9 @@ const CreateTaskForm = ({ onTaskCreated, onClose }) => {
       setDate('');
       setStartTime('09:00');
       setEndTime('09:30');
-      setCategory('study');
+      setCategory(categories[0] || '');
       setPriority('high');
-      setReminder('15');
+      setReminder(String(DEFAULT_REMINDER_MINUTES));
       setDescription('');
 
       setLoading(false);
@@ -242,12 +292,18 @@ const CreateTaskForm = ({ onTaskCreated, onClose }) => {
             className="w-full rounded-xl border border-background-dark bg-background-soft px-3 py-2.5 text-body text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
             value={category}
             onChange={(e) => setCategory(e.target.value)}
+            disabled={categoriesLoading || categories.length === 0}
           >
-            <option value="study">Study</option>
-            <option value="work">Work</option>
-            <option value="personal">Personal</option>
-            <option value="health">Health</option>
-            <option value="other">Other</option>
+            {categoriesLoading && <option value="">Loading categories...</option>}
+            {!categoriesLoading && categories.length === 0 && (
+              <option value="">No categories available</option>
+            )}
+            {!categoriesLoading &&
+              categories.map((item) => (
+                <option key={item} value={item}>
+                  {item.charAt(0).toUpperCase() + item.slice(1)}
+                </option>
+              ))}
           </select>
         </div>
         <div className="space-y-1.5">
@@ -265,6 +321,24 @@ const CreateTaskForm = ({ onTaskCreated, onClose }) => {
             <option value="low">Low</option>
           </select>
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <label htmlFor="reminder" className="block text-sm font-medium text-heading">
+          Reminder
+        </label>
+        <select
+          id="reminder"
+          className="w-full max-w-md rounded-xl border border-background-dark bg-background-soft px-3 py-2.5 text-body text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+          value={reminder}
+          onChange={(e) => setReminder(e.target.value)}
+        >
+          {REMINDER_MINUTE_OPTIONS.map((opt) => (
+            <option key={opt.value === '' ? 'default' : opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Description */}

@@ -1,11 +1,18 @@
 import React from 'react';
 import SystemAdminLayout from './SystemAdminLayout';
 import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
+import {
+  DEFAULT_REMINDER_MINUTES,
+  REMINDER_MINUTE_OPTIONS,
+  normalizeReminderMinutes,
+} from '../../utils/reminderOptions';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
+/** Must match Task.CATEGORY_CHOICES / TemplateCategory API validation */
+const TASK_CATEGORY_SLUGS = ['study', 'work', 'health', 'personal', 'shopping', 'other'];
+
 const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
-  const ALLOWED_TASK_CATEGORIES = ['study', 'work', 'health', 'personal', 'shopping', 'other'];
 
   const [templates, setTemplates] = React.useState([]);
   const [categories, setCategories] = React.useState([]);
@@ -42,6 +49,50 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     } catch (e) {
       return null;
     }
+  };
+
+  const parseTimeToMinutes = (value) => {
+    if (!value || typeof value !== 'string') return null;
+    const m = value.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)/);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  };
+
+  const minutesToTime = (totalMinutes) => {
+    const mins = ((totalMinutes % 1440) + 1440) % 1440;
+    const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+    const mm = String(mins % 60).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  const ensureMinDuration = (start, end) => {
+    const startMin = parseTimeToMinutes(start);
+    const endMinRaw = parseTimeToMinutes(end);
+    if (startMin == null || endMinRaw == null) return end;
+
+    let endMin = endMinRaw;
+    if (endMin <= startMin) {
+      endMin += 1440;
+    }
+
+    if (endMin - startMin < 15) {
+      endMin = startMin + 15;
+    }
+
+    return minutesToTime(endMin);
+  };
+
+  const toTimeInputValue = (value) => {
+    if (!value) return '';
+    const s = String(value).trim();
+    const m = s.match(/^([01]?\d|2[0-3]):([0-5]\d)(?::([0-5]\d))?/);
+    if (!m) return '';
+    return `${String(m[1]).padStart(2, '0')}:${m[2]}`;
+  };
+
+  const defaultCategoryForNewItem = () => {
+    const first = (categories || []).find((c) => TASK_CATEGORY_SLUGS.includes(String(c?.name || '').trim().toLowerCase()));
+    return first ? String(first.name).trim().toLowerCase() : 'other';
   };
 
   const mapTemplate = (tpl) => {
@@ -138,6 +189,22 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     loadCategories();
   }, []);
 
+  const categoryOptionsForItems = React.useMemo(() => {
+    const list = (categories || []).filter((c) =>
+      TASK_CATEGORY_SLUGS.includes(String(c?.name || '').trim().toLowerCase()),
+    );
+    if (list.length > 0) {
+      return list.map((c) => {
+        const v = String(c.name).trim().toLowerCase();
+        return { value: v, label: v.charAt(0).toUpperCase() + v.slice(1) };
+      });
+    }
+    return TASK_CATEGORY_SLUGS.map((slug) => ({
+      value: slug,
+      label: slug.charAt(0).toUpperCase() + slug.slice(1),
+    }));
+  }, [categories]);
+
   const openCreateCategoryModal = () => {
     setCreateCategoryName('');
     setCreateCategoryError('');
@@ -169,19 +236,44 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     setNewTemplateItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
   };
 
+  const getCurrentDateAndTimeSlot = () => {
+    const now = new Date();
+    const rounded = new Date(now);
+    rounded.setSeconds(0, 0);
+    rounded.setMinutes(Math.ceil(rounded.getMinutes() / 5) * 5);
+    if (rounded <= now) rounded.setMinutes(rounded.getMinutes() + 5);
+
+    const toDate = (d) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
+    const start = minutesToTime(rounded.getHours() * 60 + rounded.getMinutes());
+    const end = minutesToTime(rounded.getHours() * 60 + rounded.getMinutes() + 30);
+
+    return {
+      task_date: toDate(rounded),
+      start_time: start,
+      end_time: end,
+    };
+  };
+
   const addNewItem = () => {
-    const allowedCategoryOptions = (categories || []).filter((c) => ALLOWED_TASK_CATEGORIES.includes(c?.name));
+    const nowSlot = getCurrentDateAndTimeSlot();
     setNewTemplateItems((prev) => [
       ...prev,
       {
         title: '',
         description: '',
-        priority: 'medium',
-        category: (allowedCategoryOptions && allowedCategoryOptions.length > 0 ? allowedCategoryOptions[0]?.name : 'other') || 'other',
-        task_date: null,
-        start_time: null,
-        end_time: null,
+        priority: 'high',
+        category: defaultCategoryForNewItem(),
+        task_date: nowSlot.task_date,
+        start_time: nowSlot.start_time,
+        end_time: nowSlot.end_time,
         duration: null,
+        reminder_minutes: DEFAULT_REMINDER_MINUTES,
         order: prev.length,
       },
     ]);
@@ -198,43 +290,40 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     );
   };
 
-  const summarizeApiError = (data) => {
-    if (!data) return '';
-    if (typeof data === 'string') return data;
-    if (data?.detail) return data.detail;
-    if (data?.error) return data.error;
-    try {
-      const parts = [];
-      Object.entries(data).forEach(([k, v]) => {
-        if (Array.isArray(v)) {
-          parts.push(`${k}: ${v.join(' ')}`);
-          return;
-        }
-        if (v && typeof v === 'object') {
-          parts.push(`${k}: ${JSON.stringify(v)}`);
-          return;
-        }
-        parts.push(`${k}: ${String(v)}`);
-      });
-      return parts.join(' | ');
-    } catch (e) {
-      return '';
-    }
-  };
-
   const validateTemplateItems = (items) => {
     if (items.some((it) => !it.title)) {
       return 'All template items must have a title.';
     }
 
-    const invalidCategory = items.find((it) => it.category && !ALLOWED_TASK_CATEGORIES.includes(it.category));
+    const invalidCategory = items.find(
+      (it) => it.category && !TASK_CATEGORY_SLUGS.includes(String(it.category).trim().toLowerCase()),
+    );
     if (invalidCategory) {
-      return `Category "${invalidCategory.category}" is not supported by the backend. Allowed: ${ALLOWED_TASK_CATEGORIES.join(', ')}.`;
+      return `Category "${invalidCategory.category}" is not supported. Allowed: ${TASK_CATEGORY_SLUGS.join(', ')}.`;
     }
 
-    const invalidTime = items.find((it) => it.start_time && it.end_time && it.end_time <= it.start_time);
-    if (invalidTime) {
-      return 'End Time must be after Start Time.';
+    const badReminder = items.find((it) => {
+      if (it.reminder_minutes === null || it.reminder_minutes === undefined || it.reminder_minutes === '') return false;
+      const n = Number(it.reminder_minutes);
+      return !Number.isFinite(n) || n < 0 || n > 1440;
+    });
+    if (badReminder) {
+      return 'Reminder must be between 0 and 1440 minutes, or use Account default.';
+    }
+
+    for (let i = 0; i < items.length; i += 1) {
+      const it = items[i];
+      if (it.task_date && it.start_time && it.end_time) {
+        const startMin = parseTimeToMinutes(it.start_time);
+        const endMin = parseTimeToMinutes(it.end_time);
+        if (startMin != null && endMin != null) {
+          let end = endMin;
+          if (end <= startMin) end += 1440;
+          if (end - startMin < 15) {
+            return `Template item ${i + 1}: duration must be at least 15 minutes.`;
+          }
+        }
+      }
     }
 
     return '';
@@ -257,18 +346,26 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     setEditTemplateDescription(template?.description || '');
     setEditTemplateItems(
       Array.isArray(template?.items)
-        ? template.items.map((i) => ({
-            id: i?.id,
-            title: i?.title || '',
-            description: i?.description || '',
-            priority: i?.priority || 'medium',
-            category: i?.category || 'other',
-            task_date: i?.task_date || null,
-            start_time: i?.start_time || null,
-            end_time: i?.end_time || null,
-            duration: i?.duration ?? null,
-            order: typeof i?.order === 'number' ? i.order : 0,
-          }))
+        ? template.items.map((i) => {
+            const rawCat = String(i?.category || 'other').trim().toLowerCase();
+            const category = TASK_CATEGORY_SLUGS.includes(rawCat) ? rawCat : 'other';
+            return {
+              id: i?.id,
+              title: i?.title || '',
+              description: i?.description || '',
+              priority: i?.priority || 'high',
+              category,
+              task_date: i?.task_date || null,
+              start_time: i?.start_time ? toTimeInputValue(i.start_time) : '',
+              end_time: i?.end_time ? toTimeInputValue(i.end_time) : '',
+              duration: i?.duration ?? null,
+              reminder_minutes:
+                i?.reminder_minutes !== null && i?.reminder_minutes !== undefined && i?.reminder_minutes !== ''
+                  ? Number(i.reminder_minutes)
+                  : DEFAULT_REMINDER_MINUTES,
+              order: typeof i?.order === 'number' ? i.order : 0,
+            };
+          })
         : []
     );
     setEditModalOpen(true);
@@ -287,17 +384,19 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
   };
 
   const addEditItem = () => {
+    const nowSlot = getCurrentDateAndTimeSlot();
     setEditTemplateItems((prev) => [
       ...prev,
       {
         title: '',
         description: '',
-        priority: 'medium',
-        category: 'other',
-        task_date: null,
-        start_time: null,
-        end_time: null,
+        priority: 'high',
+        category: defaultCategoryForNewItem(),
+        task_date: nowSlot.task_date,
+        start_time: nowSlot.start_time,
+        end_time: nowSlot.end_time,
         duration: null,
+        reminder_minutes: DEFAULT_REMINDER_MINUTES,
         order: prev.length,
       },
     ]);
@@ -367,18 +466,19 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     const items = (editTemplateItems || []).map((it, idx) => ({
       title: (it?.title || '').trim(),
       description: (it?.description || '').trim() || null,
-      priority: it?.priority || 'medium',
-      category: it?.category || 'other',
+      priority: it?.priority || 'high',
+      category: String(it?.category || 'other').trim().toLowerCase(),
       task_date: it?.task_date || null,
-      start_time: it?.start_time || null,
-      end_time: it?.end_time || null,
+      start_time: it?.start_time ? String(it.start_time).trim() || null : null,
+      end_time: it?.end_time ? String(it.end_time).trim() || null : null,
       duration: it?.duration ?? null,
+      reminder_minutes: normalizeReminderMinutes(it?.reminder_minutes),
       order: typeof it?.order === 'number' ? it.order : idx,
     }));
 
-    const validationError = validateTemplateItems(items);
-    if (validationError) {
-      setError(validationError);
+    const patchValidationError = validateTemplateItems(items);
+    if (patchValidationError) {
+      setError(patchValidationError);
       return;
     }
 
@@ -426,17 +526,19 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
     const items = (newTemplateItems || []).map((it, idx) => ({
       title: (it?.title || '').trim(),
       description: (it?.description || '').trim() || null,
-      priority: it?.priority || 'medium',
-      category: it?.category || 'other',
+      priority: it?.priority || 'high',
+      category: String(it?.category || 'other').trim().toLowerCase(),
       task_date: it?.task_date || null,
-      start_time: it?.start_time || null,
-      end_time: it?.end_time || null,
+      start_time: it?.start_time ? String(it.start_time).trim() || null : null,
+      end_time: it?.end_time ? String(it.end_time).trim() || null : null,
       duration: it?.duration ?? null,
+      reminder_minutes: normalizeReminderMinutes(it?.reminder_minutes),
       order: typeof it?.order === 'number' ? it.order : idx,
     }));
 
-    if (items.some((it) => !it.title)) {
-      setError('All template items must have a title.');
+    const createValidationError = validateTemplateItems(items);
+    if (createValidationError) {
+      setError(createValidationError);
       return;
     }
 
@@ -479,18 +581,18 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
   };
 
   const createCategory = async () => {
-    const value = (createCategoryName || '').trim();
+    const value = (createCategoryName || '').trim().toLowerCase();
     if (!value) {
       setCreateCategoryError('Category name is required.');
       return;
     }
 
-    if (!ALLOWED_TASK_CATEGORIES.includes(value)) {
-      setCreateCategoryError(`Category must be one of: ${ALLOWED_TASK_CATEGORIES.join(', ')}.`);
+    if (!TASK_CATEGORY_SLUGS.includes(value)) {
+      setCreateCategoryError(`Category must be one of: ${TASK_CATEGORY_SLUGS.join(', ')}.`);
       return;
     }
 
-    if (categories.some((c) => (c?.name || '').toLowerCase() === value.toLowerCase())) {
+    if (categories.some((c) => (c?.name || '').toLowerCase() === value)) {
       setCreateCategoryError('Category already exists.');
       return;
     }
@@ -545,15 +647,15 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
 
   const saveCategoryEdit = async () => {
     const id = editCategoryId;
-    const name = (editCategoryName || '').trim();
+    const name = (editCategoryName || '').trim().toLowerCase();
     if (!id) return;
     if (!name) {
       setEditCategoryError('Category name is required.');
       return;
     }
 
-    if (!ALLOWED_TASK_CATEGORIES.includes(name)) {
-      setEditCategoryError(`Category must be one of: ${ALLOWED_TASK_CATEGORIES.join(', ')}.`);
+    if (!TASK_CATEGORY_SLUGS.includes(name)) {
+      setEditCategoryError(`Category must be one of: ${TASK_CATEGORY_SLUGS.join(', ')}.`);
       return;
     }
 
@@ -636,7 +738,8 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
         <div className="mb-6">
           <h1 className="text-2xl md:text-3xl font-bold text-heading">Template / Content Management</h1>
           <p className="text-sm text-text-secondary mt-1">
-            Add/edit default templates, categories, and recommended routines (frontend-only mock data).
+            Add/edit default templates and categories. Template items use the same fields as tasks (date, times,
+            category, priority, description) so users can apply a template and only adjust date and time.
           </p>
         </div>
 
@@ -818,8 +921,8 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
                 {newTemplateItems.map((it, idx) => (
                   <div key={idx} className="rounded-xl border border-background-dark bg-background-soft p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 grid gap-3 md:grid-cols-2">
-                        <div className="md:col-span-2">
+                      <div className="flex-1 space-y-3">
+                        <div>
                           <label className="block text-xs font-semibold text-text-secondary mb-1">Title</label>
                           <input
                             value={it.title}
@@ -829,75 +932,97 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-xs font-semibold text-text-secondary mb-1">Date (optional)</label>
-                          <input
-                            type="date"
-                            value={it.task_date || ''}
-                            onChange={(e) => updateNewItem(idx, { task_date: e.target.value || null })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                          />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-text-secondary mb-1">Date (optional)</label>
+                            <input
+                              type="date"
+                              value={it.task_date || ''}
+                              onChange={(e) => updateNewItem(idx, { task_date: e.target.value || null })}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-text-secondary mb-1">Start time</label>
+                            <input
+                              type="time"
+                              value={it.start_time || ''}
+                              onChange={(e) => {
+                                const nextStart = e.target.value || null;
+                                const nextEnd = ensureMinDuration(nextStart, it.end_time);
+                                updateNewItem(idx, { start_time: nextStart, end_time: nextEnd });
+                              }}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-text-secondary mb-1">End time</label>
+                            <input
+                              type="time"
+                              value={it.end_time || ''}
+                              onChange={(e) => {
+                                const nextEnd = e.target.value || null;
+                                const nextStart = ensureMinDuration(it.start_time, nextEnd);
+                                updateNewItem(idx, { start_time: nextStart, end_time: nextEnd });
+                              }}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            />
+                          </div>
                         </div>
 
-                        <div>
-                          <label className="block text-xs font-semibold text-text-secondary mb-1">Category</label>
-                          <select
-                            value={it.category || 'other'}
-                            onChange={(e) => updateNewItem(idx, { category: e.target.value })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                          >
-                            {(categories || []).filter((c) => ALLOWED_TASK_CATEGORIES.includes(c?.name)).length > 0 ? (
-                              (categories || [])
-                                .filter((c) => ALLOWED_TASK_CATEGORIES.includes(c?.name))
-                                .map((c) => (
-                                  <option key={c.id} value={c.name}>
-                                    {c.name}
-                                  </option>
-                                ))
-                            ) : (
-                              ALLOWED_TASK_CATEGORIES.map((c) => (
-                                <option key={c} value={c}>
-                                  {c}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-text-secondary mb-1">Category</label>
+                            <select
+                              value={String(it.category || 'other').toLowerCase()}
+                              onChange={(e) => updateNewItem(idx, { category: e.target.value })}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            >
+                              {categoryOptionsForItems.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
                                 </option>
-                              ))
-                            )}
-                          </select>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-text-secondary mb-1">Priority</label>
+                            <select
+                              value={it.priority || 'high'}
+                              onChange={(e) => updateNewItem(idx, { priority: e.target.value })}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            >
+                              <option value="high">High</option>
+                              <option value="medium">Medium</option>
+                              <option value="low">Low</option>
+                            </select>
+                          </div>
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-text-secondary mb-1">Start Time (optional)</label>
-                          <input
-                            type="time"
-                            value={it.start_time || ''}
-                            onChange={(e) => updateNewItem(idx, { start_time: e.target.value || null })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-text-secondary mb-1">End Time (optional)</label>
-                          <input
-                            type="time"
-                            value={it.end_time || ''}
-                            onChange={(e) => updateNewItem(idx, { end_time: e.target.value || null })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-text-secondary mb-1">Priority</label>
+                          <label className="block text-xs font-semibold text-text-secondary mb-1">Reminder</label>
                           <select
-                            value={it.priority || 'medium'}
-                            onChange={(e) => updateNewItem(idx, { priority: e.target.value })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            value={
+                              it.reminder_minutes === null || it.reminder_minutes === undefined || it.reminder_minutes === ''
+                                ? ''
+                                : String(it.reminder_minutes)
+                            }
+                            onChange={(e) =>
+                              updateNewItem(idx, {
+                                reminder_minutes: e.target.value === '' ? null : Number(e.target.value),
+                              })
+                            }
+                            className="w-full max-w-md rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                           >
-                            <option value="high">high</option>
-                            <option value="medium">medium</option>
-                            <option value="low">low</option>
+                            {REMINDER_MINUTE_OPTIONS.map((opt) => (
+                              <option key={opt.value === '' ? 'default' : opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
                           </select>
                         </div>
 
-                        <div className="md:col-span-2">
+                        <div>
                           <label className="block text-xs font-semibold text-text-secondary mb-1">Description (optional)</label>
                           <textarea
                             rows={2}
@@ -1066,6 +1191,13 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
                       Category: <span className="font-medium">{it?.category || 'other'}</span>
                       {' · '}
                       Priority: <span className="font-medium">{it?.priority || 'medium'}</span>
+                      {' · '}
+                      Reminder:{' '}
+                      <span className="font-medium">
+                        {it?.reminder_minutes !== null && it?.reminder_minutes !== undefined && it?.reminder_minutes !== ''
+                          ? `${it.reminder_minutes} min before start`
+                          : `${DEFAULT_REMINDER_MINUTES} min before start (same as new task)`}
+                      </span>
                     </div>
                     <div className="mt-1 text-xs text-text-secondary">
                       Date: <span className="font-medium">{it?.task_date || '—'}</span>
@@ -1163,8 +1295,8 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
                 {editTemplateItems.map((it, idx) => (
                   <div key={it?.id || idx} className="rounded-xl border border-background-dark bg-background-soft p-4">
                     <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1 grid gap-3 md:grid-cols-2">
-                        <div className="md:col-span-2">
+                      <div className="flex-1 space-y-3">
+                        <div>
                           <label className="block text-xs font-semibold text-text-secondary mb-1">Title</label>
                           <input
                             value={it.title}
@@ -1174,74 +1306,97 @@ const SystemAdminTemplatesLayout = ({ onNavigate, onLogout }) => {
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-xs font-semibold text-text-secondary mb-1">Category</label>
-                          <select
-                            value={it.category || 'other'}
-                            onChange={(e) => updateEditItem(idx, { category: e.target.value })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                          >
-                            {(categories || []).length > 0 ? (
-                              (categories || []).map((c) => (
-                                <option key={c.id} value={c.name}>
-                                  {c.name}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-text-secondary mb-1">Date (optional)</label>
+                            <input
+                              type="date"
+                              value={it.task_date || ''}
+                              onChange={(e) => updateEditItem(idx, { task_date: e.target.value || null })}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-text-secondary mb-1">Start time</label>
+                            <input
+                              type="time"
+                              value={it.start_time || ''}
+                              onChange={(e) => {
+                                const nextStart = e.target.value || null;
+                                const nextEnd = ensureMinDuration(nextStart, it.end_time);
+                                updateEditItem(idx, { start_time: nextStart, end_time: nextEnd });
+                              }}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-text-secondary mb-1">End time</label>
+                            <input
+                              type="time"
+                              value={it.end_time || ''}
+                              onChange={(e) => {
+                                const nextEnd = e.target.value || null;
+                                const nextStart = ensureMinDuration(it.start_time, nextEnd);
+                                updateEditItem(idx, { start_time: nextStart, end_time: nextEnd });
+                              }}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-text-secondary mb-1">Category</label>
+                            <select
+                              value={String(it.category || 'other').toLowerCase()}
+                              onChange={(e) => updateEditItem(idx, { category: e.target.value })}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            >
+                              {categoryOptionsForItems.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
                                 </option>
-                              ))
-                            ) : (
-                              <>
-                                <option value="other">other</option>
-                                <option value="work">work</option>
-                                <option value="study">study</option>
-                                <option value="personal">personal</option>
-                              </>
-                            )}
-                          </select>
+                              ))}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-text-secondary mb-1">Priority</label>
+                            <select
+                              value={it.priority || 'high'}
+                              onChange={(e) => updateEditItem(idx, { priority: e.target.value })}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            >
+                              <option value="high">High</option>
+                              <option value="medium">Medium</option>
+                              <option value="low">Low</option>
+                            </select>
+                          </div>
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-text-secondary mb-1">Priority</label>
+                          <label className="block text-xs font-semibold text-text-secondary mb-1">Reminder</label>
                           <select
-                            value={it.priority || 'medium'}
-                            onChange={(e) => updateEditItem(idx, { priority: e.target.value })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            value={
+                              it.reminder_minutes === null || it.reminder_minutes === undefined || it.reminder_minutes === ''
+                                ? ''
+                                : String(it.reminder_minutes)
+                            }
+                            onChange={(e) =>
+                              updateEditItem(idx, {
+                                reminder_minutes: e.target.value === '' ? null : Number(e.target.value),
+                              })
+                            }
+                            className="w-full max-w-md rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                           >
-                            <option value="low">low</option>
-                            <option value="medium">medium</option>
-                            <option value="high">high</option>
+                            {REMINDER_MINUTE_OPTIONS.map((opt) => (
+                              <option key={opt.value === '' ? 'default' : opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
                           </select>
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-text-secondary mb-1">Date (optional)</label>
-                          <input
-                            type="date"
-                            value={it.task_date || ''}
-                            onChange={(e) => updateEditItem(idx, { task_date: e.target.value || null })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-text-secondary mb-1">Start time (optional)</label>
-                          <input
-                            type="time"
-                            value={it.start_time || ''}
-                            onChange={(e) => updateEditItem(idx, { start_time: e.target.value || null })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-text-secondary mb-1">End time (optional)</label>
-                          <input
-                            type="time"
-                            value={it.end_time || ''}
-                            onChange={(e) => updateEditItem(idx, { end_time: e.target.value || null })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                          />
-                        </div>
-
-                        <div className="md:col-span-2">
                           <label className="block text-xs font-semibold text-text-secondary mb-1">Description (optional)</label>
                           <textarea
                             rows={2}

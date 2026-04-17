@@ -7,6 +7,7 @@ class TaskTemplateItemSerializer(serializers.ModelSerializer):
     task_date = serializers.DateField(required=False, allow_null=True)
     start_time = serializers.TimeField(required=False, input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
     end_time = serializers.TimeField(required=False, input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
+    reminder_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=0, max_value=1440)
 
     class Meta:
         model = TaskTemplateItem
@@ -21,6 +22,7 @@ class TaskTemplateItemSerializer(serializers.ModelSerializer):
             'end_time',
             'duration',
             'order',
+            'reminder_minutes',
         ]
         read_only_fields = ['id']
 

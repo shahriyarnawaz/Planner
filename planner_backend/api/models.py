@@ -1,8 +1,11 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 from zoneinfo import ZoneInfo
+
+REMINDER_MINUTES_VALIDATORS = [MinValueValidator(0), MaxValueValidator(1440)]
 
 
 class UserProfile(models.Model):
@@ -100,6 +103,14 @@ class Task(models.Model):
     completion_email_sent = models.BooleanField(default=False)
     reminder_email_sent = models.BooleanField(default=False)
     reminder_email_sent_at = models.DateTimeField(blank=True, null=True)
+
+    # Optional override for “minutes before start” reminder preference; null uses UserProfile.preferred_reminder_minutes
+    reminder_minutes = models.IntegerField(
+        blank=True,
+        null=True,
+        validators=REMINDER_MINUTES_VALIDATORS,
+        help_text='Minutes before task start for reminder preference; null uses account default.',
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -351,6 +362,12 @@ class TaskTemplateItem(models.Model):
     end_time = models.TimeField(blank=True, null=True)
     duration = models.IntegerField(blank=True, null=True)
     order = models.IntegerField(default=0)
+    reminder_minutes = models.IntegerField(
+        blank=True,
+        null=True,
+        validators=REMINDER_MINUTES_VALIDATORS,
+        help_text='Minutes before task start when applying this template; null uses account default.',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

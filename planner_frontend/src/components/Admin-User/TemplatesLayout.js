@@ -1,6 +1,11 @@
 import React from 'react';
 import AdminLayout from './AdminLayout';
 import { parseApiResponse, extractApiErrorMessage } from '../../utils/safeApiResponse';
+import {
+  DEFAULT_REMINDER_MINUTES,
+  REMINDER_MINUTE_OPTIONS,
+  normalizeReminderMinutes,
+} from '../../utils/reminderOptions';
 
 const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://127.0.0.1:8000/api';
 
@@ -87,22 +92,104 @@ const TemplatesLayout = ({ onNavigate, onLogout }) => {
     const v = value.trim();
     if (!v) return '';
     if (/^\d{2}:\d{2}$/.test(v)) return v;
-    const m = v.match(/^(\d{2}:\d{2})/);
-    return m ? m[1] : '';
+    const m = v.match(/^(\d{1,2}):(\d{2})/);
+    if (!m) return '';
+    const hh = String(Number(m[1])).padStart(2, '0');
+    const mm = m[2];
+    return `${hh}:${mm}`;
+  };
+
+  const formatDate = (date) => {
+    const y = date.getFullYear();
+    const mo = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${y}-${mo}-${day}`;
+  };
+
+  const parseTimeToMinutes = (value) => {
+    if (!value || typeof value !== 'string') return null;
+    const m = value.trim().match(/^([01]?\d|2[0-3]):([0-5]\d)$/);
+    if (!m) return null;
+    return Number(m[1]) * 60 + Number(m[2]);
+  };
+
+  const minutesToTime = (totalMinutes) => {
+    const mins = ((totalMinutes % 1440) + 1440) % 1440;
+    const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+    const mm = String(mins % 60).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  const ensureMinDuration = (start, end) => {
+    const startMin = parseTimeToMinutes(start);
+    const endMinRaw = parseTimeToMinutes(end);
+    if (startMin == null || endMinRaw == null) return end;
+
+    let endMin = endMinRaw;
+    if (endMin <= startMin) {
+      endMin += 1440;
+    }
+
+    if (endMin - startMin < 15) {
+      endMin = startMin + 15;
+    }
+
+    return minutesToTime(endMin);
+  };
+
+  const inferTemplateItemDurationMinutes = (item) => {
+    const explicit = Number(item?.duration);
+    if (Number.isFinite(explicit) && explicit >= 15) return Math.round(explicit);
+
+    const start = normalizeTime(item?.start_time);
+    const end = normalizeTime(item?.end_time);
+    const startMin = parseTimeToMinutes(start);
+    const endRaw = parseTimeToMinutes(end);
+    if (startMin != null && endRaw != null) {
+      let endMin = endRaw;
+      if (endMin <= startMin) endMin += 1440;
+      return Math.max(15, endMin - startMin);
+    }
+
+    return 30;
+  };
+
+  const nextFiveMinuteSlot = () => {
+    const now = new Date();
+    const rounded = new Date(now);
+    rounded.setSeconds(0, 0);
+    const m = rounded.getMinutes();
+    rounded.setMinutes(Math.ceil(m / 5) * 5);
+    if (rounded <= now) rounded.setMinutes(rounded.getMinutes() + 5);
+    return rounded;
   };
 
   const cloneItemsForUse = (items) => {
     const list = Array.isArray(items) ? items : [];
-    return list.map((it, idx) => ({
-      _key: `${it?.id || 'item'}-${idx}`,
-      title: it?.title || '',
-      description: it?.description || '',
-      priority: it?.priority || 'medium',
-      category: it?.category || 'other',
-      task_date: it?.task_date || '',
-      start_time: normalizeTime(it?.start_time),
-      end_time: normalizeTime(it?.end_time),
-    }));
+    const anchor = nextFiveMinuteSlot();
+    let cursor = new Date(anchor);
+
+    return list.map((it, idx) => {
+      const duration = inferTemplateItemDurationMinutes(it);
+      const startAt = new Date(cursor);
+      const endAt = new Date(startAt.getTime() + duration * 60000);
+      cursor = new Date(endAt);
+
+      const category = String(it?.category || 'other').trim().toLowerCase();
+      const reminder_minutes =
+        normalizeReminderMinutes(it?.reminder_minutes) ?? DEFAULT_REMINDER_MINUTES;
+      return {
+        _key: `${it?.id || 'item'}-${idx}`,
+        title: it?.title || '',
+        description: it?.description || '',
+        priority: it?.priority || 'high',
+        category,
+        task_date: formatDate(startAt),
+        start_time: minutesToTime(startAt.getHours() * 60 + startAt.getMinutes()),
+        end_time: minutesToTime(endAt.getHours() * 60 + endAt.getMinutes()),
+        reminder_minutes,
+      };
+    });
   };
 
   const loadGlobalTemplates = async () => {
@@ -300,6 +387,39 @@ const TemplatesLayout = ({ onNavigate, onLogout }) => {
         setUseError(`Task ${i + 1}: start time and end time are required.`);
         return;
       }
+
+      try {
+        const startDateTime = new Date(`${task_date}T${start_time}`);
+        const endDateTime = new Date(`${task_date}T${end_time}`);
+        if (Number.isNaN(startDateTime.getTime()) || Number.isNaN(endDateTime.getTime())) {
+          setUseError(`Task ${i + 1}: invalid date or time.`);
+          return;
+        }
+        let adjustedEnd = new Date(endDateTime.getTime());
+        if (adjustedEnd < startDateTime) {
+          adjustedEnd = new Date(adjustedEnd.getTime() + 24 * 60 * 60 * 1000);
+        }
+        const minutes = Math.round((adjustedEnd.getTime() - startDateTime.getTime()) / 60000);
+        if (minutes < 15) {
+          setUseError(`Task ${i + 1}: duration must be at least 15 minutes.`);
+          return;
+        }
+
+        const now = new Date();
+        const taskDateOnly = new Date(`${task_date}T00:00:00`);
+        const todayOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (taskDateOnly < todayOnly) {
+          setUseError(`Task ${i + 1}: date cannot be in the past.`);
+          return;
+        }
+        if (taskDateOnly.getTime() === todayOnly.getTime() && startDateTime <= now) {
+          setUseError(`Task ${i + 1}: start time must be in the future for today.`);
+          return;
+        }
+      } catch (e) {
+        setUseError(`Task ${i + 1}: invalid date or time selection.`);
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -314,12 +434,13 @@ const TemplatesLayout = ({ onNavigate, onLogout }) => {
           },
           body: JSON.stringify({
             title: (it?.title || '').trim(),
-            description: (it?.description || '').trim(),
-            priority: it?.priority || 'medium',
-            category: it?.category || 'other',
+            description: (it?.description || '').trim() || '',
+            priority: it?.priority || 'high',
+            category: String(it?.category || 'other').trim().toLowerCase(),
             task_date: (it?.task_date || '').trim(),
             start_time: (it?.start_time || '').trim(),
             end_time: (it?.end_time || '').trim(),
+            reminder_minutes: normalizeReminderMinutes(it?.reminder_minutes),
           }),
         });
 
@@ -606,7 +727,8 @@ const TemplatesLayout = ({ onNavigate, onLogout }) => {
               </button>
               <h2 className="text-lg font-bold text-heading">Use Template: {useTemplate?.name || 'Template'}</h2>
               <p className="mt-1 text-sm text-text-secondary">
-                Edit tasks and assign dates, then create them in your Task Management.
+                This template is converted into active tasks using your current date/time. It then enters Task Management
+                queue exactly like tasks you create manually.
               </p>
             </div>
 
@@ -627,7 +749,7 @@ const TemplatesLayout = ({ onNavigate, onLogout }) => {
                         <div className="font-semibold text-heading">Task {idx + 1}</div>
                       </div>
 
-                      <div className="grid gap-3 mt-3 md:grid-cols-2">
+                      <div className="mt-3 space-y-3">
                         <div>
                           <label className="block text-xs font-semibold text-heading mb-1">Title</label>
                           <input
@@ -638,82 +760,126 @@ const TemplatesLayout = ({ onNavigate, onLogout }) => {
                           />
                         </div>
 
-                        <div>
-                          <label className="block text-xs font-semibold text-heading mb-1">Date</label>
-                          <input
-                            type="date"
-                            value={it.task_date}
-                            onChange={(e) => updateUseItem(idx, { task_date: e.target.value })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                            disabled={submitting}
-                          />
+                        <div className="grid gap-3 md:grid-cols-3">
+                          <div>
+                            <label className="block text-xs font-semibold text-heading mb-1">Date</label>
+                            <input
+                              type="date"
+                              value={it.task_date}
+                              onChange={(e) => updateUseItem(idx, { task_date: e.target.value })}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                              disabled={submitting}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-heading mb-1">Start time</label>
+                            <input
+                              type="time"
+                              value={it.start_time}
+                              onChange={(e) => {
+                                const nextStart = e.target.value;
+                                const nextEnd = ensureMinDuration(nextStart, it.end_time);
+                                updateUseItem(idx, { start_time: nextStart, end_time: nextEnd });
+                              }}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                              disabled={submitting}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-heading mb-1">End time</label>
+                            <input
+                              type="time"
+                              value={it.end_time}
+                              onChange={(e) => {
+                                const nextEnd = e.target.value;
+                                const nextStart = ensureMinDuration(it.start_time, nextEnd);
+                                updateUseItem(idx, { start_time: nextStart, end_time: nextEnd });
+                              }}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                              disabled={submitting}
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-heading mb-1">Category</label>
+                            <select
+                              value={String(it.category || 'other').toLowerCase()}
+                              onChange={(e) => updateUseItem(idx, { category: e.target.value })}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                              disabled={submitting}
+                            >
+                              {templateCategories.length > 0 ? (
+                                templateCategories.map((c) => {
+                                  const v = String(c.name || '').trim().toLowerCase();
+                                  return (
+                                    <option key={c.id} value={v}>
+                                      {v ? v.charAt(0).toUpperCase() + v.slice(1) : c.name}
+                                    </option>
+                                  );
+                                })
+                              ) : (
+                                <>
+                                  <option value="study">Study</option>
+                                  <option value="work">Work</option>
+                                  <option value="health">Health</option>
+                                  <option value="personal">Personal</option>
+                                  <option value="shopping">Shopping</option>
+                                  <option value="other">Other</option>
+                                </>
+                              )}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-heading mb-1">Priority</label>
+                            <select
+                              value={it.priority || 'high'}
+                              onChange={(e) => updateUseItem(idx, { priority: e.target.value })}
+                              className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                              disabled={submitting}
+                            >
+                              <option value="high">High</option>
+                              <option value="medium">Medium</option>
+                              <option value="low">Low</option>
+                            </select>
+                          </div>
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-heading mb-1">Start time</label>
-                          <input
-                            type="time"
-                            value={it.start_time}
-                            onChange={(e) => updateUseItem(idx, { start_time: e.target.value })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                            disabled={submitting}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-heading mb-1">End time</label>
-                          <input
-                            type="time"
-                            value={it.end_time}
-                            onChange={(e) => updateUseItem(idx, { end_time: e.target.value })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                            disabled={submitting}
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-xs font-semibold text-heading mb-1">Category</label>
+                          <label className="block text-xs font-semibold text-heading mb-1">Reminder</label>
                           <select
-                            value={it.category}
-                            onChange={(e) => updateUseItem(idx, { category: e.target.value })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
+                            value={
+                              it.reminder_minutes === null || it.reminder_minutes === undefined || it.reminder_minutes === ''
+                                ? ''
+                                : String(it.reminder_minutes)
+                            }
+                            onChange={(e) =>
+                              updateUseItem(idx, {
+                                reminder_minutes: e.target.value === '' ? null : Number(e.target.value),
+                              })
+                            }
+                            className="w-full max-w-md rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
                             disabled={submitting}
                           >
-                            {templateCategories.length > 0 ? (
-                              templateCategories.map((c) => (
-                                <option key={c.id} value={c.name}>
-                                  {c.name}
+                            {REMINDER_MINUTE_OPTIONS.map((opt) => (
+                              <option key={opt.value === '' ? 'default' : opt.value} value={opt.value}>
+                                {opt.label}
+                              </option>
+                            ))}
+                            {it.reminder_minutes !== null &&
+                              it.reminder_minutes !== undefined &&
+                              it.reminder_minutes !== '' &&
+                              !REMINDER_MINUTE_OPTIONS.some((o) => o.value === String(it.reminder_minutes)) && (
+                                <option value={String(it.reminder_minutes)}>
+                                  {it.reminder_minutes} min before (from template)
                                 </option>
-                              ))
-                            ) : (
-                              <>
-                                <option value="study">Study</option>
-                                <option value="work">Work</option>
-                                <option value="health">Health</option>
-                                <option value="personal">Personal</option>
-                                <option value="shopping">Shopping</option>
-                                <option value="other">Other</option>
-                              </>
-                            )}
+                              )}
                           </select>
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-heading mb-1">Priority</label>
-                          <select
-                            value={it.priority}
-                            onChange={(e) => updateUseItem(idx, { priority: e.target.value })}
-                            className="w-full rounded-xl border border-background-dark bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-light focus:border-primary"
-                            disabled={submitting}
-                          >
-                            <option value="low">Low</option>
-                            <option value="medium">Medium</option>
-                            <option value="high">High</option>
-                          </select>
-                        </div>
-
-                        <div className="md:col-span-2">
-                          <label className="block text-xs font-semibold text-heading mb-1">Description</label>
+                          <label className="block text-xs font-semibold text-heading mb-1">Description (optional)</label>
                           <textarea
                             value={it.description}
                             onChange={(e) => updateUseItem(idx, { description: e.target.value })}

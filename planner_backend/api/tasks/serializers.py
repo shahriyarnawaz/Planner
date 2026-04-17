@@ -30,6 +30,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'end_time',
             'deadline',
             'duration',
+            'reminder_minutes',
             'calculated_duration',
             'completed',
             'is_overdue',
@@ -58,6 +59,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
 
     start_time = serializers.TimeField(input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
     end_time = serializers.TimeField(input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
+    reminder_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=0, max_value=1440)
 
     class Meta:
         model = Task
@@ -70,6 +72,7 @@ class TaskCreateSerializer(serializers.ModelSerializer):
             'start_time',
             'end_time',
             'duration',
+            'reminder_minutes',
         ]
     
     def validate(self, attrs):
@@ -103,6 +106,7 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
 
     start_time = serializers.TimeField(required=False, input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
     end_time = serializers.TimeField(required=False, input_formats=['%H:%M:%S', '%H:%M', '%I:%M %p', '%I:%M:%S %p'])
+    reminder_minutes = serializers.IntegerField(required=False, allow_null=True, min_value=0, max_value=1440)
 
     class Meta:
         model = Task
@@ -116,7 +120,9 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
             'end_time',
             'duration',
             'completed',
+            'reminder_minutes',
         ]
+
     def validate(self, attrs):
         from datetime import datetime
         # Only require slots if changing any slot
@@ -159,6 +165,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             'start_time',
             'end_time',
             'deadline',
+            'reminder_minutes',
             'completed',
             'is_overdue',
             'created_at',

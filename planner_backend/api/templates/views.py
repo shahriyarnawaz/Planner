@@ -63,6 +63,7 @@ class TemplateSaveView(APIView):
                         end_time=item.end_time,
                         duration=item.duration,
                         order=item.order,
+                        reminder_minutes=getattr(item, 'reminder_minutes', None),
                     )
                 )
 
