@@ -220,10 +220,12 @@ CELERY_TASK_TRACK_STARTED = True
 CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_DEFAULT_QUEUE = 'default'
 
-# Named queues for workers: celery -A planner_backend worker -Q mail,tasks,maintenance,default -l info
-CELERY_MAIL_QUEUE = os.environ.get('CELERY_MAIL_QUEUE', 'mail')
-CELERY_TASKS_QUEUE = os.environ.get('CELERY_TASKS_QUEUE', 'tasks')
-CELERY_MAINTENANCE_QUEUE = os.environ.get('CELERY_MAINTENANCE_QUEUE', 'maintenance')
+# Queue defaults are "default" so `celery -A planner_backend worker -l info`
+# works in local/dev without extra -Q flags. In production, set env vars to
+# split queues (e.g. mail/tasks/maintenance) and run workers with -Q.
+CELERY_MAIL_QUEUE = os.environ.get('CELERY_MAIL_QUEUE', 'default')
+CELERY_TASKS_QUEUE = os.environ.get('CELERY_TASKS_QUEUE', 'default')
+CELERY_MAINTENANCE_QUEUE = os.environ.get('CELERY_MAINTENANCE_QUEUE', 'default')
 
 CELERY_TASK_ROUTES = {
     'api.send_task_reminder_job': {'queue': CELERY_MAIL_QUEUE},
@@ -236,6 +238,12 @@ CELERY_BROKER_TRANSPORT_OPTIONS = {
     'visibility_timeout': int(os.environ.get('CELERY_VISIBILITY_TIMEOUT', '432000')),
     'retry_on_timeout': True,
 }
+
+# Windows: prefork can crash with billiard semaphore/handle errors.
+# Use solo by default on Windows so local reminders/completions execute reliably.
+if os.name == 'nt':
+    CELERY_WORKER_POOL = os.environ.get('CELERY_WORKER_POOL', 'solo')
+    CELERY_WORKER_CONCURRENCY = int(os.environ.get('CELERY_WORKER_CONCURRENCY', '1'))
 
 # Flower: pip install flower && celery -A planner_backend flower --port=5555
 # Sentry: optional; set SENTRY_DSN in the environment and install sentry-sdk

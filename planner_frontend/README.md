@@ -69,8 +69,15 @@ This section has moved here: [https://facebook.github.io/create-react-app/docs/d
 
 This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
 
-
-
-python manage.py auto_complete_tasks --interval-seconds 15
+1.Command to run the backend project
 python manage.py runserver
-npm start
+
+2.Command to run the frontend project
+npm start  
+
+
+3.Step to run the redis for autmation 
+
+cd D:\Planner-Project\planner_backend
+.\.venv\Scripts\activate
+celery -A planner_backend worker -l info
