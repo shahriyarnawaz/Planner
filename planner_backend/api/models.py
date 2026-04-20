@@ -1,7 +1,7 @@
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.contrib.auth.models import User
-from django.db.models.signals import post_save
+from django.db.models.signals import post_save, pre_delete
 from django.dispatch import receiver
 from zoneinfo import ZoneInfo
 
@@ -111,6 +111,10 @@ class Task(models.Model):
         validators=REMINDER_MINUTES_VALIDATORS,
         help_text='Minutes before task start for reminder preference; null uses account default.',
     )
+
+    # Celery ETA job IDs (revoke/reschedule on update; cleared after revoke or execution)
+    reminder_task_id = models.CharField(max_length=255, blank=True, null=True)
+    completion_task_id = models.CharField(max_length=255, blank=True, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -238,55 +242,19 @@ class Task(models.Model):
                 f"previous_completion_email_sent={previous_completion_email_sent}"
             )
 
+        from django.db import transaction
+        from api.services.task_schedule import sync_task_notification_jobs
+
         if self.completed:
             TaskReminder.objects.filter(task=self, sent_at__isnull=True).delete()
+            transaction.on_commit(
+                lambda pk=self.pk: sync_task_notification_jobs(pk, revoke_only=True)
+            )
             return
 
-        if self.deadline:
-            self.schedule_reminders()
-
-    def schedule_reminders(self, min_gap_minutes=1):
-        from datetime import timedelta
-        from django.utils import timezone
-        from django.conf import settings
-        pk_tz = ZoneInfo('Asia/Karachi')
-
-        if not self.task_date or not self.start_time or not self.created_at:
-            return
-
-        now = timezone.now()
-        min_allowed = self.created_at + timedelta(minutes=min_gap_minutes)
-
-        naive_start = timezone.datetime.combine(self.task_date, self.start_time)
-        start_at = timezone.make_aware(naive_start, pk_tz)
-
-        TaskReminder.objects.filter(task=self, sent_at__isnull=True).delete()
-
-        candidates = [
-            (TaskReminder.TYPE_DAY_BEFORE, start_at - timedelta(days=1)),
-            (TaskReminder.TYPE_HOUR_BEFORE, start_at - timedelta(hours=1)),
-            (TaskReminder.TYPE_MINUTES_15, start_at - timedelta(minutes=15)),
-        ]
-
-        reminders_to_create = []
-        for reminder_type, scheduled_for in candidates:
-            if scheduled_for <= now:
-                if getattr(settings, 'DEBUG', False):
-                    print(f"REMINDER SKIP (past): Task(id={self.id}), type={reminder_type}, scheduled_for={scheduled_for}")
-                continue
-            if scheduled_for < min_allowed:
-                if getattr(settings, 'DEBUG', False):
-                    print(f"REMINDER SKIP (too-soon-after-create): Task(id={self.id}), type={reminder_type}, scheduled_for={scheduled_for}, min_allowed={min_allowed}")
-                continue
-            reminders_to_create.append(TaskReminder(task=self, reminder_type=reminder_type, scheduled_for=scheduled_for))
-
-        if reminders_to_create:
-            TaskReminder.objects.bulk_create(reminders_to_create)
-            if getattr(settings, 'DEBUG', False):
-                print(f"REMINDER SCHEDULED: Task(id={self.id}) created {len(reminders_to_create)} reminder(s)")
-        else:
-            if getattr(settings, 'DEBUG', False):
-                print(f"REMINDER SCHEDULED: Task(id={self.id}) created 0 reminder(s)")
+        transaction.on_commit(
+            lambda pk=self.pk: sync_task_notification_jobs(pk, revoke_only=False)
+        )
 
 
 class TaskReminder(models.Model):
@@ -318,6 +286,13 @@ class TaskReminder(models.Model):
 
     def __str__(self):
         return f"{self.task_id} - {self.reminder_type} - {self.scheduled_for}"
+
+
+@receiver(pre_delete, sender=Task)
+def _task_pre_delete_revoke_celery(sender, instance, **kwargs):
+    from api.services.task_schedule import revoke_task_notification_jobs_for_instance
+
+    revoke_task_notification_jobs_for_instance(instance)
 
 
 class TemplateCategory(models.Model):

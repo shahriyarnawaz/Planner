@@ -13,6 +13,7 @@ class ApiConfig(AppConfig):
     def ready(self):
         """Import signals when app is ready"""
         import api.models  # This ensures signals are registered
+        import api.celery_tasks  # noqa: F401 — register Celery shared_tasks
 
         try:
             import os

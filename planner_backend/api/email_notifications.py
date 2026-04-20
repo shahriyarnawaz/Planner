@@ -276,9 +276,12 @@ def send_task_creation_email(task):
         return False
 
 
-def send_task_completion_email(task):
+def send_task_completion_email(task, *, raise_on_failure=False):
     """
-    Send email notification when a task is completed or time is over
+    Send email notification when a task is completed or time is over.
+
+    When raise_on_failure is True (e.g. Celery retry path), failures raise instead of
+    returning False so the worker can apply backoff.
     """
     user = task.user
     updated_local = _to_pk_time(task.updated_at)
@@ -406,15 +409,18 @@ def send_task_completion_email(task):
         print(f"Error: {str(e)}")
         print(f"Task ID: {task.id}")
         print("="*60 + "\n")
+        if raise_on_failure:
+            raise
         return False
 
 
-def send_task_reminder_email(task, reminder_type=None, scheduled_for=None):
+def send_task_reminder_email(task, reminder_type=None, scheduled_for=None, *, raise_on_failure=False):
     """
     Send reminder email for upcoming deadline task
     """
     user = task.user
-    
+    subject = f'Reminder: {task.title}'
+
     # Calculate time until deadline
     from django.utils import timezone
     pk_tz = ZoneInfo('Asia/Karachi')
@@ -563,4 +569,6 @@ def send_task_reminder_email(task, reminder_type=None, scheduled_for=None):
         print(f"Error: {str(e)}")
         print(f"Task ID: {task.id}")
         print("="*60 + "\n")
+        if raise_on_failure:
+            raise
         return None
